@@ -105,7 +105,7 @@ preprocess <- function(data, cont_vars) {
   # Factor variables:
   data$HPVISHHR <- factor(data$HPVISHHR)
   data$TILS <- factor(data$TILS)
-  data$T <- factor(data$T)
+  data$T <- factor(data$T) 
   data$N <- factor(data$N)
   data$`Smoking status` <- factor(data$`Smoking status`)
   data$Surgery <- factor(data$Surgery)
