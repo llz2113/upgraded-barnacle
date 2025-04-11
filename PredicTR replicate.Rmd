@@ -76,7 +76,7 @@ to_numeric <- function(data, vars) {
 
 
 #Convert everything except Gender to numeric
-predictr_data <- to_numeric(predictr_data, )
+predictr_data <- to_numeric(predictr_data, all_vars)
 #str(predictr_data)
 
 # Convert "NA" to NA in Gender:
@@ -93,7 +93,7 @@ complete_data2 <- predictr_data[!is.na(predictr_data$t.os) & !is.na(predictr_dat
 #Convert continuous variables to z scores, factor p16, HR-HPV DNA, TILs, age, gender, T-category, N-category, smoking status, surgery, RT, CT (using lowest category as baseline group). Need to make sure everything is already numeric
 preprocess <- function(data, cont_vars) {
 #scale the continuous vars, "cont_vars" then z-transform
-  for (col in cont_vars) {
+  for (col in c(cont_vars)) {
     data[[col]] <- as.numeric(as.character(data[[col]]))
     data[[col]] <- scale(data[[col]]/30)[,1]
  }
@@ -105,7 +105,7 @@ preprocess <- function(data, cont_vars) {
   # Factor variables:
   data$HPVISHHR <- factor(data$HPVISHHR)
   data$TILS <- factor(data$TILS)
-  data$T <- factor(data$T) 
+  data$T <- factor(data$T)
   data$N <- factor(data$N)
   data$`Smoking status` <- factor(data$`Smoking status`)
   data$Surgery <- factor(data$Surgery)
@@ -119,14 +119,19 @@ preprocess <- function(data, cont_vars) {
 data_processed <- preprocess(complete_data1, cont_vars)
 
 str(data_processed)
+
+#Now convert t.os and Outcome to numeric:
+data_processed$t.os <- as.numeric(as.character(data_processed$t.os))
+data_processed$Outcome <- as.numeric(as.character(data_processed$Outcome))
+
 #Split into training and validation cohorts
 training_data <- predictr_data[data$set == "Training", ]
 val_data <-predictr_data[data$set == "Validation", ]
 
 #Remove NAs, convert all vars to numeric except Gender
-training_ptd <- preprocess_data(training_data, c("t.os", "Outcome", all_vars))
+training_ptd <- preprocess(training_data, c("t.os", "Outcome", all_vars))
 #Get 259 
-training_ptd2 <- preprocess_data(training_data, c("t.os", all_vars))
+training_ptd2 <- preprocess(training_data, c("t.os", all_vars))
 #Get 263 => must be 4 observations where "Outcome" is unknown but "t.os" is known
 
 str(training_ptd2)
@@ -181,8 +186,15 @@ all_vars1 <- c("BCL2", "COX2", "CyclinD1", "EGFRext", "HIF1alpha", "PLK1","Survi
               "p16_binary", "HPVISHHR","TILS", "Gender","Age.at.Diagnosis", "Surgery", 
               "RT", "CT", "T", "N", "Smoking.status")
 
+# Summary of key columns
+str(data_processed[, c("t.os", "Outcome", all_vars1)])
+sapply(data_processed[, c("t.os", "Outcome", all_vars1)], function(x) sum(is.na(x)))
+
+
+
+complete_only <- data_processed[!is.na(data_processed$t.os) & !is.na(data_processed$Outcome),]
+
 print(univariable_cox(data_processed, all_vars1))
 
-data_processed
 
 ```
