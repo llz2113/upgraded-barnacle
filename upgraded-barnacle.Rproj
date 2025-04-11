@@ -1,0 +1,16 @@
+Version: 1.0
+ProjectId: 3331d3af-5e2c-48fb-a8e6-828bc4e148df
+
+RestoreWorkspace: Default
+SaveWorkspace: Default
+AlwaysSaveHistory: Default
+
+EnableCodeIndexing: Yes
+UseSpacesForTab: Yes
+NumSpacesForTab: 2
+Encoding: UTF-8
+
+RnwWeave: Sweave
+LaTeX: pdfLaTeX
+
+ProjectName: predictr
