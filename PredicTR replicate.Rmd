@@ -1,12 +1,13 @@
 ---
-title: "PredicTR replicate"
+title: "PredicTR"
 output: html_document
-date: "2025-03-18"
+date: "2025-04-28"
 ---
 
 ## Install/load packages and import data
 
 ```{r setup, include=FALSE}
+
 library(survival)
 library(survcomp)
 library(MASS)
@@ -27,12 +28,15 @@ pacman::p_load(survival,
                tidyverse)
 
 options(show.signif.stars = FALSE)  # display statistical intelligence
+```
 
+#Load data
+```{r setup, include=FALSE}
 #Load data
 
 data <- read_excel("~/Downloads/Lauren/Med school/Research/PredicTR/Predictor cleaned dataset ( recieved Syed Haider 2.3.17 merged_data) +Manchester gender info.xls")
 
-str(data)
+#str(data)
 training <-  data[data$set == "Training", ]
 val <- data[data$set == "Validation", ]
 
@@ -44,18 +48,22 @@ cont_vars <- c("BCL2", "COX2", "CyclinD1", "EGFRext", "HIF1alpha", "PLK1","Survi
 biomarkers <- c("BCL2", "COX2", "CyclinD1", "EGFRext", "HPVISHHR", "p16", "PLK1", "Survivin","TILS")
 
 #Set which vars to select and keep them
-predictr_data <- subset(data, select = c(all_vars, "t.os", "Outcome"))
+predictr_data <- subset(data, select = c(all_vars, "t.os", "Outcome", "set"))
 
+predictr_data_dx_date <- subset(data, select = c(all_vars, "t.os", "Outcome", "set", "Diagnostic Biopsy Date"))
+#str(predictr_data_dx_date)
+
+## Numeric conversion except gender and set.
 to_numeric <- function(data, vars) {
   for (col in vars) {
-    if (col!="Gender"){
+    if (col!="Gender" & col!="set"){
       if (is.factor(data[[col]]) || is.character(data[[col]])) {
             data[[col]] <- as.character(data[[col]])
             data[[col]][data[[col]] == "NA"] <- NA
             data[[col]] <- as.numeric(data[[col]])
           }
     }
-      # Handle NAs, numeric conversion except gender.
+
     
   }
 
@@ -74,21 +82,33 @@ to_numeric <- function(data, vars) {
 } 
 
 
-
 #Convert everything except Gender to numeric
-predictr_data <- to_numeric(predictr_data, all_vars)
-#str(predictr_data)
-
-# Convert "NA" to NA in Gender:
+predictr_data <- to_numeric(predictr_data, c(all_vars, "Outcome", "t.os"))
+predictr_data_dx_date <- to_numeric(predictr_data_dx_date, c(all_vars, "Outcome", "t.os", "Diagnostic Biopsy Date"))
+str(predictr_data)
+str(predictr_data_dx_date)
+# Convert "NA" to NA in Gender and set:
 predictr_data$Gender[predictr_data$Gender == "NA"] <- NA
+predictr_data$set[predictr_data$set == "NA"] <- NA
+
+predictr_data_dx_date$Gender[predictr_data_dx_date$Gender == "NA"] <- NA
+predictr_data_dx_date$set[predictr_data_dx_date$set == "NA"] <- NA
+
 
 #Remove NAs (based on which variables?)
-complete_data0 <- predictr_data[complete.cases(predictr_data), ]
+rm.na0 <- predictr_data[complete.cases(predictr_data), ]
 #Gives 471 observations
-complete_data1 <- predictr_data[!is.na(predictr_data$t.os), ]
+rm.na1 <- predictr_data[!is.na(predictr_data$t.os), ]
 # Gives 835 observations
-complete_data2 <- predictr_data[!is.na(predictr_data$t.os) & !is.na(predictr_data$Outcome), ]
+
+rm.na2 <- predictr_data[!is.na(predictr_data$t.os) & !is.na(predictr_data$Outcome), ]
 # Gives 809 observations
+
+colSums(is.na(rm.na2_dx_date))
+# Here, 'Age at Diagnosis' has 2 NAs: maybe that's another required var?
+
+rm.na1_dx_date <- predictr_data_dx_date[!is.na(predictr_data_dx_date$t.os) & !is.na(predictr_data_dx_date$`Diagnostic Biopsy Date`) & !is.na(predictr_data_dx_date$`Age at Diagnosis`), ]
+# Gives 833 obs, once requiring 'Age at Diagnosis'
 
 #Convert continuous variables to z scores, factor p16, HR-HPV DNA, TILs, age, gender, T-category, N-category, smoking status, surgery, RT, CT (using lowest category as baseline group). Need to make sure everything is already numeric
 preprocess <- function(data, cont_vars) {
@@ -112,30 +132,31 @@ preprocess <- function(data, cont_vars) {
   data$RT <- factor(data$RT)
   data$CT <- factor(data$CT)
   data$Gender <- factor(data$Gender)
-
+  
   return(data)
 } 
 
-data_processed <- preprocess(complete_data1, cont_vars)
+data_scaled <- preprocess(rm.na1, cont_vars)
 
-str(data_processed)
+data_scaled_dx_date <- preprocess(rm.na1_dx_date, cont_vars)
+str(data_scaled)
+str(data_scaled_dx_date)
 
-#Now convert t.os and Outcome to numeric:
-data_processed$t.os <- as.numeric(as.character(data_processed$t.os))
-data_processed$Outcome <- as.numeric(as.character(data_processed$Outcome))
+#Split into training and validation
+training_data <- data_scaled[data_scaled$set == "Training", ]
+#n=530
+training_data_dx_date <- data_scaled_dx_date[data_scaled_dx_date$set == "Training",]
+#n=528
 
-#Split into training and validation cohorts
-training_data <- predictr_data[data$set == "Training", ]
-val_data <-predictr_data[data$set == "Validation", ]
+val_data <-data_scaled[data_scaled$set == "Validation", ]
+#n=305
+val_data_dx_date <- data_scaled_dx_date[data_scaled_dx_date$set == "Validation",]
+#n=305
 
-#Remove NAs, convert all vars to numeric except Gender
-training_ptd <- preprocess(training_data, c("t.os", "Outcome", all_vars))
-#Get 259 
-training_ptd2 <- preprocess(training_data, c("t.os", all_vars))
-#Get 263 => must be 4 observations where "Outcome" is unknown but "t.os" is known
+str(training_data)
+str(training_data_dx_date)
 
-str(training_ptd2)
-unique(complete_data1$T)
+
 
 ```
 
@@ -152,16 +173,27 @@ unique(complete_data1$T)
 summary(predictr_data[biomarkers])
 ```
 ## Table S5
-n are different - many more observations than in supplemental materials.
+n are different - +/- 1 or 2 observations in almost all columns
 ```{r}
+#n column
+summary(training_data)[]
+nrow(training_data_dx_date)
+summary(training_data_dx_date)[]
+col_n <- nrow(training_data_dx_date) - colSums(is.na(training_data_dx_date))
+col_n
+#Make sure names agree
+names(training_data)
+names(col_n)[names(col_n) == "Age at Diagnosis"] <- "Age.at.Diagnosis"
+names(col_n)[names(col_n) == "Smoking status"] <- "Smoking.status"
+names(col_n)
+```
 
+##Univariable Cox
+```{r}
 # Function for univariable Cox
-univariable_cox <- function(data, vars) {
+univariable_cox <- function(data, vars, n_obs) {
   results <- lapply(vars, function(var) {
-    
-    # Subset to non-NA for this variable, t.os, and Outcome
-    valid_data <- data[!is.na(data[[var]]) & !is.na(data$t.os) & !is.na(data$Outcome), ]
-    n_obs <- nrow(valid_data)
+
     
     formula <- as.formula(paste("Surv(t.os, Outcome) ~", var))
     model <- coxph(formula, data = data)
@@ -171,7 +203,8 @@ univariable_cox <- function(data, vars) {
                       Lower = coef_summary[, "coef"] - 1.96 * coef_summary[, "se(coef)"],
                       Upper = coef_summary[, "coef"] + 1.96 * coef_summary[, "se(coef)"],
                       P = coef_summary[, "Pr(>|z|)"],
-                      n = n_obs))
+                      n = n_obs[[var]]
+                      ))
   })
   results_df <- bind_rows(results)
   # Adjust p-values using Benjamini & Hochberg method
@@ -179,22 +212,822 @@ univariable_cox <- function(data, vars) {
   return(bind_rows(results_df))
 }
 
-colnames(data_processed)[colnames(data_processed) == 'Age at Diagnosis'] <- 'Age.at.Diagnosis'
-colnames(data_processed)[colnames(data_processed) == 'Smoking status'] <- 'Smoking.status'
+colnames(training_data)[colnames(training_data) == 'Age at Diagnosis'] <- 'Age.at.Diagnosis'
+colnames(training_data)[colnames(training_data) == 'Smoking status'] <- 'Smoking.status'
 
 all_vars1 <- c("BCL2", "COX2", "CyclinD1", "EGFRext", "HIF1alpha", "PLK1","Survivin", 
               "p16_binary", "HPVISHHR","TILS", "Gender","Age.at.Diagnosis", "Surgery", 
               "RT", "CT", "T", "N", "Smoking.status")
 
 # Summary of key columns
-str(data_processed[, c("t.os", "Outcome", all_vars1)])
-sapply(data_processed[, c("t.os", "Outcome", all_vars1)], function(x) sum(is.na(x)))
+str(training_data[, c("t.os", "Outcome", all_vars1)])
+sapply(training_data[, c("t.os", "Outcome", all_vars1)], function(x) sum(is.na(x)))
+#levels(training_data$Gender)
+#F=1, M=2
 
+print(univariable_cox(training_data, all_vars1, col_n))
 
-
-complete_only <- data_processed[!is.na(data_processed$t.os) & !is.na(data_processed$Outcome),]
-
-print(univariable_cox(data_processed, all_vars1))
 
 
 ```
+## (Table S6): Biomarker-only original multivariable prognostic model
+```{r}
+# Function 5: Multivariable Cox with Backward Elimination (S6)
+print_cox_model <- function(data, vars) {
+  formula <- as.formula(paste("Surv(t.os, Outcome) ~", paste(vars, collapse = " + ")))
+  full_model <- coxph(formula, data = data)
+  k <- qchisq(0.25, 1, lower.tail = FALSE)  # ~1.323
+  step_model <- step(full_model, direction = "backward", k = 2, trace = 1)
+  #Extract coefficients
+  coef_summary <- summary(step_model)$coefficients
+  return(data.frame(Variable = rownames(coef_summary),
+                    coef = coef_summary[, "coef"],
+                    `exp(coef)` = coef_summary[, "exp(coef)"],
+                    `se(coef)` = coef_summary[, "se(coef)"],
+                    z = coef_summary[, "z"],
+                    P = coef_summary[, "Pr(>|z|)"]))
+}
+biomarkers <- c("BCL2","COX2", "CyclinD1", "EGFRext", "HPVISHHR", "p16_binary", "PLK1", "Survivin", "TILS")
+biomarkers_reduced <- c("p16_binary", "Survivin", "HPVISHHR", "TILS")
+#biomarker_model <- fit_cox_model(training_data, biomarkers)
+str(training_data[, c("t.os", "Outcome", biomarkers)])
+sapply(training_data[, c("t.os", "Outcome", biomarkers)], function(x) sum(is.na(x)))
+table(training_data$Outcome, useNA = "ifany")
+
+colnames(training_data)[colnames(training_data) == 'Age at Diagnosis'] <- 'Age.at.Diagnosis'
+colnames(training_data)[colnames(training_data) == 'Smoking status'] <- 'Smoking.status'
+
+complete_training_data <- training_data[complete.cases(training_data[, c("t.os", "Outcome", all_vars1)]), ]
+# n= 259, want 266
+print(print_cox_model(complete_training_data, biomarkers))
+#Still get EGFRext, although it shouldn't be included
+
+print(print_cox_model(complete_training_data, biomarkers_reduced))
+
+
+
+
+```
+# Kaplan-Meier curves:
+
+
+
+## Model training and classification of risk groups (+Survivin)
+```{r}
+# Train the biomarker-only model
+
+fit_cox_model <- function(data, vars) {
+#  data <- data[complete.cases(data[, c("t.os", "Outcome", vars)]), ]
+  cat("Training n =", nrow(data), "\n")
+  
+  formula <- as.formula(paste("Surv(t.os, Outcome) ~", paste(vars, collapse = " + ")))
+  full_model <- coxph(formula, data = data)
+#  k <- qchisq(0.25, 1, lower.tail = FALSE)  # 1.323
+#  step_model <- step(full_model, direction = "backward", k = k, trace = 1)
+  
+  return(full_model)  # Return the model object
+}
+
+# final_model (Cox) : Surv(t.os, Outcome) ~ biomarkers_reduced, with complete training data (n=259)
+final_model <- fit_cox_model(complete_training_data, biomarkers_reduced)
+
+
+str(val_data_dx_date[, c("t.os", "Outcome", biomarkers_reduced)])
+sapply(val_data_dx_date[, c("t.os", "Outcome", biomarkers_reduced)], function(x) sum(is.na(x)))
+table(val_data_dx_date$Outcome, useNA = "ifany")
+
+
+colnames(val_data)[colnames(val_data) == 'Age at Diagnosis'] <- 'Age.at.Diagnosis'
+colnames(val_data)[colnames(val_data) == 'Smoking status'] <- 'Smoking.status'
+
+colnames(val_data_dx_date)[colnames(val_data_dx_date) == 'Age at Diagnosis'] <- 'Age.at.Diagnosis'
+colnames(val_data_dx_date)[colnames(val_data_dx_date) == 'Smoking status'] <- 'Smoking.status'
+colnames(val_data_dx_date)[colnames(val_data_dx_date) == 'Diagnostic Biopsy Date'] <- 'Diagnostic.Biopsy.Date'
+
+complete_val_data_dx_date <- val_data_dx_date[complete.cases(val_data_dx_date[, c("t.os", "Outcome", "Diagnostic.Biopsy.Date", all_vars1)]), ]
+
+nrow(complete_val_data_dx_date)
+# n= 212
+
+# Calculate risk scores based on training set:
+complete_training_data$risk_score <- predict(final_model, complete_training_data, type = "risk")
+summary(complete_training_data$risk_score)
+
+# Median split — dichotomize into high- and low-risk groups
+complete_training_data$risk_group <- ifelse(complete_training_data$risk_score > median(complete_training_data$risk_score, na.rm = TRUE), 1, 0)
+
+sum(complete_training_data$risk_group)
+risk_med_cutoff <- median(complete_training_data$risk_score)
+
+# calculate and classify risk scores in validation cohort:
+complete_val_data_dx_date$risk_score <- predict(final_model, complete_val_data_dx_date, type = "risk")
+summary(complete_val_data_dx_date$risk_score)
+
+complete_val_data_dx_date$risk_group <- ifelse(complete_val_data_dx_date$risk_score > risk_med_cutoff, 1, 0)
+# Number of patients in high-risk and low-risk groups (validation set):
+table(complete_val_data_dx_date$risk_group)
+
+# No. of events in each group:
+complete_val_data_dx_date %>%
+  select(Outcome, risk_group) %>%
+  group_by(risk_group, Outcome) %>%
+  summarise(n = n())
+
+
+
+```
+
+## Model training and classification of risk groups (-Survivin)
+```{r}
+new_model <- fit_cox_model(complete_training_data, c("p16_binary", "HPVISHHR", "TILS"))
+
+# Calculate risk scores based on median of training set:
+complete_training_data$risk_score_new <- predict(new_model, complete_training_data, type = "risk")
+summary(complete_training_data$risk_score_new)
+summary(complete_training_data$risk_score)
+
+ggplot(complete_training_data, aes(x = risk_score)) +
+  geom_histogram(aes(y = after_stat(density), fill = "Original"), alpha = 0.5, bins = 100) +
+  geom_histogram(aes(x = risk_score_new, y = after_stat(density), fill = "New"), alpha = 0.5, bins = 100) +
+  labs(title = "Histogram of Risk Scores",
+       x = "Risk Score",
+       y = "Density",
+       fill = "Score Type") +
+  theme_minimal()
+
+risk_med_cutoff_new <- median(complete_training_data$risk_score_new)
+
+hist(complete_training_data$risk_score_new, xlab = "Risk score",
+     col = "grey", border = "black", breaks = 100)
+# calculate and classify risk scores in validation cohort:
+complete_val_data_dx_date$risk_score_new <- predict(new_model, complete_val_data_dx_date, type = "risk")
+summary(complete_val_data_dx_date$risk_score_new)
+#plot
+ggplot(complete_val_data_dx_date, aes(x = risk_score_new)) +
+  geom_histogram(aes(y = after_stat(density), fill = "Original"), alpha = 0.5, bins = 100) +
+  geom_histogram(aes(x = risk_score_new, y = after_stat(density), fill = "New"), alpha = 0.5, bins = 100) +
+  labs(title = "Histogram of Risk Scores",
+       x = "Risk Score",
+       y = "Density",
+       fill = "Score Type") +
+  theme_minimal()
+
+complete_val_data_dx_date$risk_group_new <- ifelse(complete_val_data_dx_date$risk_score_new > risk_med_cutoff_new, 1, 0)
+# Number of patients in high-risk and low-risk groups (validation set):
+table(complete_val_data_dx_date$risk_group_new)
+
+# No. of events in each group:
+complete_val_data_dx_date %>%
+  select(Outcome, risk_group_new) %>%
+  group_by(risk_group_new, Outcome) %>%
+  summarise(n = n())
+
+
+# 3-year and 5-year OS by risk group:
+
+surv_obj <- Surv(complete_val_data_dx_date$t.os, complete_val_data_dx_date$Outcome)
+surv_fit_new <- survfit(surv_obj ~ risk_group_new, data = complete_val_data_dx_date)
+summary(surv_fit_new, times = seq(0,5)*1)
+
+
+```
+
+# classification changes in the new model
+```{r}
+library(dplyr)
+
+#Validation data
+
+complete_val_data_dx_date %>%
+  group_by(risk_group_new, risk_group) %>%
+  summarise(n = n())  
+
+#Training data
+
+complete_training_data %>%
+  group_by(risk_group_new, risk_group) %>%
+  summarise(n = n())
+
+
+```
+
+
+
+## Plot, 4-biomarker model
+```{r}
+# Survival analysis
+library(survival)
+
+# Validation data
+
+## From documentation: Surv() creates a survival object. Takes two arguments: time to event and event status: 1 for event and 0 for censoring.
+## survfit() : Fits a survival curve using either a formula, of from a previously fitted Cox model.
+## We will use "surv_obj ~ risk_group" as the formula for the K-M survival curves
+#3-year and 5-year OS
+surv_obj <- Surv(complete_val_data_dx_date$t.os, complete_val_data_dx_date$Outcome)
+surv_fit0 <- survfit(surv_obj ~ risk_group, data = complete_val_data_dx_date)
+summary(surv_fit0, times = seq(0,5)*1)
+
+# Log-rank test to conduct between-group significance -> log-rank p-value
+survdiff(surv_obj ~ risk_group, data = complete_val_data_dx_date)
+
+library(survminer)
+library(ggsurvfit)
+
+# Plot with ggsurvplot
+
+surv_fit <- survfit2(Surv(t.os, Outcome) ~ risk_group, data = complete_val_data_dx_date, type = "kaplan-meier") %>%
+  ggsurvfit() +
+  add_risktable() +
+  add_confidence_interval() +
+  guides(fill = "none") +
+  add_pvalue(caption = "Log-rank {p.value}") + #show log-rank p-value
+  scale_x_continuous(
+    limits = c(0,5), # Truncates at 5y
+    breaks = seq(0,5, by =1 ), # 1-year ticks
+    name = "Time (years)"
+  ) +
+  scale_y_continuous(name = "Survival Probability") +
+  scale_color_manual(
+    values = c("red", "blue"),
+    name = "Risk Group",
+    labels = c("Low Risk", "High Risk")
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+    panel.background = element_blank(),      # optional: remove grey background
+    panel.grid = element_blank()             # optional: remove gridlines
+  )
+
+
+surv_fit
+
+
+# Training data curve 
+
+surv_fit_t <- survfit2(Surv(t.os, Outcome) ~ risk_group, data = complete_training_data, type = "kaplan-meier") %>%
+  ggsurvfit() +
+  add_risktable() +
+  add_confidence_interval() +
+  guides(fill = "none") +
+  add_pvalue(caption = "Log-rank {p.value}") + #show log-rank p-value
+  scale_x_continuous(
+    limits = c(0,5), # Truncates at 5y
+    breaks = seq(0,5, by =1 ), # 1-year ticks
+    name = "Time (years)"
+  ) +
+  scale_y_continuous(name = "Survival Probability") +
+  scale_color_manual(
+    values = c("red", "blue"),
+    name = "Risk Group",
+    labels = c("Low Risk", "High Risk")
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+    panel.background = element_blank(),      # optional: remove grey background
+    panel.grid = element_blank()             # optional: remove gridlines
+  ) +
+  annotate(
+    "text", 
+    x = 0,  # adjust X location as needed
+    y = 0.05,  # adjust Y location as needed
+    label = "HR = 8.20 (4.19-16.05)", 
+    hjust = 0,
+    size = 4
+  )
+
+surv_fit_t
+
+```
+
+#Plots, 3-biomarker model
+```{r}
+
+# Validation data curve 
+
+surv_fit_new <- survfit2(Surv(t.os, Outcome) ~ risk_group_new, data = complete_val_data_dx_date, type = "kaplan-meier") %>%
+  ggsurvfit() +
+  add_risktable() +
+  add_confidence_interval() +
+  guides(fill = "none") +
+  add_pvalue(caption = "Log-rank {p.value}") + #show log-rank p-value
+  scale_x_continuous(
+    limits = c(0,5), # Truncates at 5y
+    breaks = seq(0,5, by =1 ), # 1-year ticks
+    name = "Time (years)"
+  ) +
+  scale_y_continuous(name = "Survival Probability") +
+  scale_color_manual(
+    values = c("red", "blue"),
+    name = "Risk Group",
+    labels = c("Low Risk", "High Risk")
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+    panel.background = element_blank(),      # optional: remove grey background
+    panel.grid = element_blank()             # optional: remove gridlines
+  )
+
+surv_fit_new
+
+
+# Training data curve 
+
+surv_fit_new_t <- survfit2(Surv(t.os, Outcome) ~ risk_group_new, data = complete_training_data, type = "kaplan-meier") %>%
+  ggsurvfit() +
+  add_risktable() +
+  add_confidence_interval() +
+  guides(fill = "none") +
+  add_pvalue(caption = "Log-rank {p.value}") + #show log-rank p-value
+  scale_x_continuous(
+    limits = c(0,5), # Truncates at 5y
+    breaks = seq(0,5, by =1 ), # 1-year ticks
+    name = "Time (years)"
+  ) +
+  scale_y_continuous(name = "Survival Probability") +
+  scale_color_manual(
+    values = c("red", "blue"),
+    name = "Risk Group",
+    labels = c("Low Risk", "High Risk")
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+    panel.background = element_blank(),      # optional: remove grey background
+    panel.grid = element_blank()             # optional: remove gridlines
+  ) +
+  annotate(
+    "text", 
+    x = 0,  # adjust X location as needed
+    y = 0.05,  # adjust Y location as needed
+    label = "HR = 5.69 (3.38–9.58)", 
+    hjust = 0,
+    size = 4
+  )
+
+surv_fit_new_t
+```
+
+
+
+
+
+## Table S11 (includes C-index, sensitivity, PPV, NPV)
+```{r}
+# Train the biomarker-only model
+
+fit_cox_model <- function(data, vars) {
+#  data <- data[complete.cases(data[, c("t.os", "Outcome", vars)]), ]
+  cat("Training n =", nrow(data), "\n")
+  
+  formula <- as.formula(paste("Surv(t.os, Outcome) ~", paste(vars, collapse = " + ")))
+  full_model <- coxph(formula, data = data)
+#  k <- qchisq(0.25, 1, lower.tail = FALSE)  # 1.323
+#  step_model <- step(full_model, direction = "backward", k = k, trace = 1)
+  
+  return(full_model)  # Return the model object
+}
+
+final_model <- fit_cox_model(complete_training_data, biomarkers_reduced)
+
+
+str(val_data_dx_date[, c("t.os", "Outcome", biomarkers_reduced)])
+sapply(val_data_dx_date[, c("t.os", "Outcome", biomarkers_reduced)], function(x) sum(is.na(x)))
+table(val_data_dx_date$Outcome, useNA = "ifany")
+
+
+colnames(val_data)[colnames(val_data) == 'Age at Diagnosis'] <- 'Age.at.Diagnosis'
+colnames(val_data)[colnames(val_data) == 'Smoking status'] <- 'Smoking.status'
+
+colnames(val_data_dx_date)[colnames(val_data_dx_date) == 'Age at Diagnosis'] <- 'Age.at.Diagnosis'
+colnames(val_data_dx_date)[colnames(val_data_dx_date) == 'Smoking status'] <- 'Smoking.status'
+colnames(val_data_dx_date)[colnames(val_data_dx_date) == 'Diagnostic Biopsy Date'] <- 'Diagnostic.Biopsy.Date'
+
+complete_val_data_dx_date <- val_data_dx_date[complete.cases(val_data_dx_date[, c("t.os", "Outcome", "Diagnostic.Biopsy.Date", all_vars1)]), ]
+
+nrow(complete_val_data_dx_date)
+# n= 212
+
+complete_val_data_dx_date$risk_score <- predict(final_model, newdata = complete_val_data_dx_date, type = "lp")
+summary(complete_val_data_dx_date$risk_score)
+
+# Median split: dichotomize into high- and low-risk groups
+complete_val_data_dx_date$risk_group <- ifelse(complete_val_data_dx_date$risk_score > median(complete_val_data_dx_date$risk_score, na.rm = TRUE), 1, 0)
+
+# Survival analysis
+library(survival)
+surv_obj <- Surv(complete_val_data_dx_date$t.os, complete_val_data_dx_date$Outcome)
+surv_fit <- survfit(surv_obj ~ risk_group, data = complete_val_data_dx_date)
+summary(surv_fit)
+survdiff(surv_obj ~ risk_group, data = complete_val_data_dx_date)  # Log-rank test
+
+plot(surv_fit, col = c("blue", "red"), main = "Survival by Risk Group", xlab = "Time (t.os)", ylab = "Survival Probability", xlim = c(0,5))
+legend("topright", c("Low Risk", "High Risk"), col = c("blue", "red"), lty = 1)
+
+library(survminer)
+
+# Fit survival model
+surv_fit <- survfit(Surv(t.os, Outcome) ~ risk_group, data = complete_val_data_dx_date, type = "kaplan-meier")
+
+# Plot with ggsurvplot
+ggsurvplot(
+  surv_fit,
+  data = complete_val_data_dx_date,
+  xlim = c(0, 5),                   # restrict x-axis to 5 years
+  break.time.by = 1,
+  xlab = "Time (years)",
+  ylab = "Survival Probability",
+ #surv.median.line = "hv",         # optional: add horizontal/vertical median lines
+  pval = TRUE,                     # show log-rank p-value
+  conf.int = TRUE,                 # add confidence interval
+  risk.table = TRUE,              # add risk table below
+  tables.y.text = FALSE,
+  censor = TRUE,                   # mark censoring (default: TRUE)
+  mark.time = TRUE,                # show tick marks at event times
+  palette = c("blue", "red"),      # customise colours
+  legend.title = "Risk Group",
+  legend.labs = c("Low Risk", "High Risk"),
+  fontsize = 3
+)
+
+surv_fit
+```
+
+
+
+# Cox model, 4-biomarker model
+```{r}
+# Cox model for HR, CI, p-value for validation data — 4-biomarker model
+
+cox_model <- coxph(Surv(t.os, Outcome) ~ risk_group, data = complete_val_data_dx_date)
+cox_summary <- summary(cox_model)
+print(cox_summary$coefficients)  # See row/col names
+coef <- cox_summary$coefficients["risk_group", "coef"]
+hr <- cox_summary$coefficients["risk_group", "exp(coef)"]
+se <- cox_summary$coefficients["risk_group", "se(coef)"]
+ci_lower <- exp(coef - 1.96 * se)
+ci_upper <- exp(coef + 1.96 * se)
+p_value <- cox_summary$coefficients["risk_group", "Pr(>|z|)"]
+
+# Output
+cat("HR (1 vs. 0):", hr, "\n") #HR (1 vs. 0): 4.24
+cat("95% CI:", ci_lower, "-", ci_upper, "\n") #95% CI: 2.49 - 7.23 
+cat("P-value:", p_value, "\n") #P-value: p<0.001 (1.1e-7) 
+
+#More succinct way to find HR using val data
+
+library(gtsummary)
+
+coxph(Surv(t.os, Outcome) ~ risk_group, data = complete_val_data_dx_date) %>%
+  tbl_regression(exp=TRUE)
+
+# HR using val data, 4-biomarker
+
+hr1 <- hazard.ratio(x=complete_val_data_dx_date$risk_group, surv.time = complete_val_data_dx_date$t.os, surv.event = complete_val_data_dx_date$Outcome)
+hr1[c(1,4,5,6)]
+
+#HR using training data:
+
+complete_training_data$risk_score <- predict(final_model, newdata = complete_training_data, type = "risk")
+
+# Median split: dichotomize into high- and low-risk groups
+complete_training_data$risk_group <- ifelse(complete_training_data$risk_score > median(complete_training_data$risk_score, na.rm = TRUE), 1, 0)
+
+hr_train <- hazard.ratio(x=complete_training_data$risk_group, surv.time = complete_training_data$t.os, surv.event = complete_training_data$Outcome)
+
+# HR (95%CI), p-val
+hr_train[c(1,4,5,6)]
+# Get 8.21 (4.19-16.05)
+
+cox_risk_analysis <- function(data, time_col = "t.os", event_col = "Outcome", group_col = "risk_group", factor = FALSE) {
+  # Handle risk_group
+  if (factor) {
+    data[[group_col]] <- factor(data[[group_col]], levels = c("Low", "High"))
+    coef_name <- paste0(group_col, "High")
+  } else {
+    data[[group_col]] <- as.numeric(data[[group_col]])
+    coef_name <- group_col
+  }
+  
+  # Cox model
+  formula <- as.formula(paste("Surv(", time_col, ",", event_col, ") ~", group_col))
+  cox_model <- coxph(formula, data = data)
+  cox_summary <- summary(cox_model)  
+  
+  # Extract results
+  coef <- cox_summary$coefficients[coef_name, "coef"]
+  hr <- cox_summary$coefficients[coef_name, "exp(coef)"]
+  se <- cox_summary$coefficients[coef_name, "se(coef)"]
+  ci_lower <- exp(coef - 1.96 * se)
+  ci_upper <- exp(coef + 1.96 * se)
+  p_value <- cox_summary$coefficients[coef_name, "Pr(>|z|)"]
+  # Output
+  label <- if (factor) "High vs. Low" else "1 vs. 0"
+  cat("HR (", label, "): ", hr, "\n", sep = "")
+  cat("95% CI: ", ci_lower, " - ", ci_upper, "\n", sep = "")
+  cat("P-value: ", p_value, "\n", sep = "")
+  
+  # Return
+  return(list(hr = hr, ci_lower = ci_lower, ci_upper = ci_upper, p_value = p_value, 
+              coefficients = cox_summary$coefficients))
+}
+
+results_val <- cox_risk_analysis(complete_val_data_dx_date, time_col = "t.os", 
+                                   event_col = "Outcome", group_col = "risk_group", 
+                                   factor = FALSE)
+
+
+```
+
+
+# Cox model, 3-biomarker model
+```{r}
+# Cox model for HR, CI, p-value for validation data — 4-biomarker model
+
+cox_model_new <- coxph(Surv(t.os, Outcome) ~ risk_group_new, data = complete_val_data_dx_date)
+cox_summary_new <- summary(cox_model_new)
+print(cox_summary_new$coefficients)  # See row/col names
+coef_new <- cox_summary_new$coefficients["risk_group_new", "coef"]
+hr_new <- cox_summary_new$coefficients["risk_group_new", "exp(coef)"]
+se_new <- cox_summary_new$coefficients["risk_group_new", "se(coef)"]
+ci_lower_new <- exp(coef_new - 1.96 * se_new)
+ci_upper_new <- exp(coef_new + 1.96 * se_new)
+p_value_new <- cox_summary_new$coefficients["risk_group_new", "Pr(>|z|)"]
+
+# Output
+cat("HR (1 vs. 0):", hr_new, "\n") #HR (1 vs. 0): 3.82
+cat("95% CI:", ci_lower_new, "-", ci_upper_new, "\n") #95% CI: 2.41 - 6.07
+cat("P-value:", p_value_new, "\n") #P-value: p<0.001 (1.3e-8) 
+
+# For a table of HR, 95% CI using val data 
+
+library(gtsummary)
+
+coxph(Surv(t.os, Outcome) ~ risk_group_new, data = complete_val_data_dx_date) %>%
+  tbl_regression(exp=TRUE)
+
+
+hr1_new <- hazard.ratio(x=complete_val_data_dx_date$risk_group_new, surv.time = complete_val_data_dx_date$t.os, surv.event = complete_val_data_dx_date$Outcome)
+hr1_new[c(1,4,5,6)]
+
+#HR using training data:
+
+complete_training_data$risk_score_new <- predict(new_model, newdata = complete_training_data, type = "risk")
+
+# Median split: dichotomize into high- and low-risk groups
+complete_training_data$risk_group_new <- ifelse(complete_training_data$risk_score_new > median(complete_training_data$risk_score_new, na.rm = TRUE), 1, 0)
+
+hr_train_new <- hazard.ratio(x=complete_training_data$risk_group_new, surv.time = complete_training_data$t.os, surv.event = complete_training_data$Outcome)
+
+# HR (95%CI), p-val
+hr_train_new[c(1,4,5,6)]
+```
+
+# HR comparisons
+```{r}
+# NOTE: COMPARING HR IS NOT THE BEST WAY TO COMPARE MODELS. HRs tell you how quickly disease progresses on average but not discrimination.
+# Comparing HRs between high- and low-risk groups in validation data, 4-biomarker model vs. 3-biomarker model
+hr.comp(hr1, hr1_new)
+# And for training data, 4-biomarker model vs. 3-biomarker model:
+hr.comp(hr_train, hr_train_new)
+
+```
+
+
+# Discrimination Measures: Uno's C-index
+```{r}
+library(pacman)
+pacman::p_load(survival,
+               Hmisc,
+               riskRegression,
+               timeROC)
+
+val_c_index <- 1-(concordance(Surv(complete_val_data_dx_date$t.os, complete_val_data_dx_date$Outcome) ~ complete_val_data$risk_score)$concordance)
+
+val_c_index
+summary(final_model)
+
+val_clean <- complete_val_data_dx_date[complete.cases(complete_val_data_dx_date[, c("t.os", "Outcome", "risk_score", "Diagnostic.Biopsy.Date")]), ]
+nrow(val_clean)  # n = 212
+surv_obj <- Surv(complete_val_data$t.os, complete_val_data$Outcome)
+summary(surv_obj)
+
+
+
+val_surv_obj <- Surv(complete_val_data$t.os, complete_val_data$Outcome)
+concordance_val <- concordance(val_surv_obj ~ risk_score, data = complete_val_data)
+
+print(concordance_val$concordance)  # get a C-index of 0.74 ; does not match 0.73 value in paper (Table S11)
+
+# contingency table for PPV, NPV, sensitivity calculations
+table_pred <- table(Predicted = complete_val_data$risk_group, Actual = complete_val_data$Outcome)
+TP <- table_pred[2,2]; FP <- table_pred[2,1]; TN <- table_pred[1,1]; FN <- table_pred[1,2]
+print(sens <- TP/(TP+FN))
+print(PPV <- TP/(TP+FP))
+print(NPV <- TN/(TN+FN))
+
+#Concordance index:
+c_index <- function(model, train_data, val_data) {
+  train_data$risk_score <- predict(model, newdata = train_data, type = "lp")
+  val_data$risk_score <- predict(model, newdata = val_data, type = "lp")
+  
+  #Make the column "risk_group"
+  val_data$risk_group <- ifelse(val_data$risk_score > median(val_data$risk_score, na.rm = TRUE), 1, 0)
+  train_data$risk_group <- ifelse(train_data$risk_score > median(train_data$risk_score, na.rm = TRUE), 1, 0)
+  
+  #C-index calculation
+  
+  train_c <- concordance(Surv(train_data$t.os, train_data$Outcome) ~ -train_data$risk_score)$concordance
+  val_c <-  concordance(Surv(val_data$t.os, val_data$Outcome) ~ -val_data$risk_score)$concordance
+}
+results <- c_index(final_model, complete_training_data, complete_val_data)
+cat("Val C-index:", results$val_c, "\n")
+
+
+
+```
+## Surgery vs no surgery in high-risk and low-risk patient groups, validation cohort
+```{r}
+summary(complete_val_data$Surgery) #total: 212. Paper (Fig 3C): 221
+table_risk_surgery <- table(Risk_group = complete_val_data$risk_group, Surgery = complete_val_data$Surgery); print(table_risk_surgery)
+ls0 <- table_risk_surgery[1,1]; ls1 <- table_risk_surgery[1,2]; hs0 <- table_risk_surgery[2,1]; hs1 <- table_risk_surgery[2,2]
+
+#Split into the risk+surgery groups:
+val_data_ls0 <- complete_val_data[(complete_val_data$Surgery == 0 & complete_val_data$risk_group == 0),]
+val_data_ls1 <- complete_val_data[(complete_val_data$Surgery == 1 & complete_val_data$risk_group == 0),]
+val_data_hs0 <- complete_val_data[(complete_val_data$Surgery == 0 & complete_val_data$risk_group == 1),]
+val_data_hs1 <- complete_val_data[(complete_val_data$Surgery == 1 & complete_val_data$risk_group == 1),]
+
+table(complete_val_data$risk_group)
+#n = 212 (vs. 221)
+#Low: 95 (vs. 101)
+#High: 117 (vs. 120)
+
+nrow(val_data_ls0) #39, not 38
+nrow(val_data_ls1) #67, not 63
+
+nrow(val_data_hs0) # 48, not 55
+nrow(val_data_hs1) # 58, not 65
+
+table(val_data_ls0$Smoking.status)
+table(val_data_ls1$Smoking.status)
+table(val_data_ls0$HPVISHHR)
+table(val_data_ls1$HPVISHHR)
+
+table(val_data_hs0$Smoking.status)
+table(val_data_hs1$Smoking.status)
+table(val_data_hs0$HPVISHHR)
+table(val_data_hs1$HPVISHHR)
+
+
+library(survminer)
+
+#Create combined group factor
+complete_val_data$risk_surgery <- factor(
+  paste0(
+    
+    ifelse(complete_val_data$risk_group==0, "l", "h"),
+    ifelse(complete_val_data$Surgery == 0, "s0", "s1")
+    
+  ),
+  levels = c("ls0", "ls1", "hs0", "hs1")
+)
+
+#Kaplan-Meier
+surv_obj <- Surv(complete_val_data$t.os, complete_val_data$Outcome)
+
+surv_fit <- survfit(surv_obj ~ risk_surgery, data = complete_val_data)
+
+str(complete_val_data$risk_surgery)
+print(summary(surv_fit))
+
+ggsurv <- ggsurvplot(
+  surv_fit,
+  data = complete_val_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = TRUE,
+  risk.table.height = 0.25,
+  title = "Survival by Risk Group and Surgery Status",
+  xlab = "Time (months)",
+  ylab = "Survival Probability",
+  legend.title = "Group",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 60)  # Adjust based on t.os range
+)
+print(ggsurv)
+
+
+low_data <- complete_val_data[complete_val_data$risk_group == 0, ]
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+low_hr <- low_summary$coefficients["Surgery1", "exp(coef)"]
+low_ci <- exp(low_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * low_summary$coefficients["Surgery1", "se(coef)"])
+low_p <- low_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+low_hr
+low_ci
+low_p
+
+
+high_data <- complete_val_data[complete_val_data$risk_group == 1, ]
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+high_hr <- high_summary$coefficients["Surgery1", "exp(coef)"]
+high_ci <- exp(high_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * high_summary$coefficients["Surgery1", "se(coef)"])
+high_p <- high_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+#High-risk group: surgery vs non surgery
+high_hr
+high_ci
+high_p
+
+
+```
+## Surgery vs no surgery in low-risk and high-risk pts, training cohort
+```{r}
+summary(complete_training_data$Surgery) #total: 259 Paper (Fig 3A): 266
+table_risk_surgery0 <- table(Risk_group = complete_training_data$risk_group, Surgery = complete_training_data$Surgery); print(table_risk_surgery0)
+ls0 <- table_risk_surgery0[1,1]; ls1 <- table_risk_surgery0[1,2]; hs0 <- table_risk_surgery0[2,1]; hs1 <- table_risk_surgery0[2,2]
+
+#Split into the risk+surgery groups:
+train_data_ls0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 0),]
+train_data_ls1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 0),]
+train_data_hs0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 1),]
+train_data_hs1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 1),]
+
+
+library(survminer)
+
+#Create combined group factor
+complete_training_data$risk_surgery <- factor(
+  paste0(
+    
+    ifelse(complete_training_data$risk_group==0, "l", "h"),
+    ifelse(complete_training_data$Surgery == 0, "s0", "s1")
+    
+  ),
+  levels = c("ls0", "ls1", "hs0", "hs1")
+)
+
+#Kaplan-Meier
+surv_obj0 <- Surv(complete_training_data$t.os, complete_training_data$Outcome)
+
+surv_fit0 <- survfit(surv_obj0 ~ risk_surgery, data = complete_training_data)
+
+str(complete_training_data$risk_surgery)
+print(summary(surv_fit0))
+
+ggsurv <- ggsurvplot(
+  surv_fit0,
+  data = complete_training_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = TRUE,
+  risk.table.height = 0.25,
+  title = "Survival by Risk Group and Surgery Status",
+  xlab = "Time (months)",
+  ylab = "Survival Probability",
+  legend.title = "Group",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 60)  # Adjust based on t.os range
+)
+print(ggsurv)
+
+
+low_data <- complete_training_data[complete_training_data$risk_group == 0, ]
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+low_hr <- low_summary$coefficients["Surgery1", "exp(coef)"]
+low_ci <- exp(low_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * low_summary$coefficients["Surgery1", "se(coef)"])
+low_p <- low_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+low_hr
+low_ci
+low_p
+
+
+high_data <- complete_training_data[complete_training_data$risk_group == 1, ]
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+high_hr <- high_summary$coefficients["Surgery1", "exp(coef)"]
+high_ci <- exp(high_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * high_summary$coefficients["Surgery1", "se(coef)"])
+high_p <- high_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+#High-risk group: surgery vs non surgery
+high_hr
+high_ci
+high_p
+
+```
+
+
