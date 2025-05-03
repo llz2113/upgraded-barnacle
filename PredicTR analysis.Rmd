@@ -239,7 +239,7 @@ print(univariable_cox(training_data, all_vars1, col_n))
 # Function 5: Multivariable Cox with Backward Elimination (S6)
 print_cox_model <- function(data, vars) {
   formula <- as.formula(paste("Surv(t.os, Outcome) ~", paste(vars, collapse = " + ")))
-  full_model <- coxph(formula, data = data)
+  full_model <- coxph(formula, data = data, x=T, y=T)
   k <- qchisq(0.25, 1, lower.tail = FALSE)  # ~1.323
   step_model <- step(full_model, direction = "backward", k = 2, trace = 1)
   #Extract coefficients
@@ -302,7 +302,7 @@ fit_cox_model <- function(data, vars) {
   cat("Training n =", nrow(data), "\n")
   
   formula <- as.formula(paste("Surv(t.os, Outcome) ~", paste(vars, collapse = " + ")))
-  full_model <- coxph(formula, data = data)
+  full_model <- coxph(formula, data = data, x=T, y=T)
 #  k <- qchisq(0.25, 1, lower.tail = FALSE)  # 1.323
 #  step_model <- step(full_model, direction = "backward", k = k, trace = 1)
   
@@ -342,7 +342,7 @@ nrow(complete_val_data_dx_date)
 # n= 305
 
 # Calculate risk scores based on training set:
-complete_training_data$risk_score <- predict(survivin_model, complete_training_data, type = "risk")
+complete_training_data$risk_score <- predict(survivin_model, complete_training_data, type = "lp")
 summary(complete_training_data$risk_score)
 
 # Median split — dichotomize into high- and low-risk groups
@@ -353,16 +353,16 @@ risk_med_cutoff <- median(complete_training_data$risk_score)
 
 # complete_val_data_dx_date (require t.os is complete): calculate and classify risk scores in validation cohort.
 
-complete_val_data_dx_date$risk_score <- predict(survivin_model, complete_val_data_dx_date, type = "risk")
+complete_val_data_dx_date$risk_score <- predict(survivin_model, complete_val_data_dx_date, type = "lp")
 summary(complete_val_data_dx_date$risk_score)
 
 complete_val_data_dx_date$risk_group <- ifelse(complete_val_data_dx_date$risk_score > risk_med_cutoff, 1, 0)
 
 # test_val_data (require t.os and biomarkers are complete): calculate and classify risk scores in validation cohort:
-test_val_data$risk_score <- predict(survivin_model, test_val_data, type = "risk")
+test_val_data$risk_score <- predict(survivin_model, test_val_data, type = "lp")
 summary(test_val_data$risk_score)
 
-test_val_data $risk_group <- ifelse(test_val_data$risk_score > risk_med_cutoff, 1, 0)
+test_val_data$risk_group <- ifelse(test_val_data$risk_score > risk_med_cutoff, 1, 0)
 # Number of patients in high-risk and low-risk groups (validation set):
 table(test_val_data$risk_group)
 # 95 assigned low-risk
@@ -389,10 +389,6 @@ n_obs <- complete_val_data_dx_date %>%
 
 print(n_obs)
 
-val_data_refined <- complete_val_data_dx_date %>%
-  filter(if_all(all_of(biomarkers_reduced, t.os), ~ !is.na(.)))
-
-
 
 
 ```
@@ -402,7 +398,7 @@ val_data_refined <- complete_val_data_dx_date %>%
 new_model <- fit_cox_model(complete_training_data, c("p16_binary", "HPVISHHR", "TILS"))
 
 # Calculate risk scores based on median of training set:
-complete_training_data$risk_score_new <- predict(new_model, complete_training_data, type = "risk")
+complete_training_data$risk_score_new <- predict(new_model, complete_training_data, type = "lp")
 summary(complete_training_data$risk_score_new)
 summary(complete_training_data$risk_score)
 
@@ -421,7 +417,7 @@ hist(complete_training_data$risk_score_new, xlab = "Risk score",
      col = "grey", border = "black", breaks = 100)
 # Using complete_val_data_dx_date (t.os is complete)
 # calculate and classify risk scores in validation cohort:
-complete_val_data_dx_date$risk_score_new <- predict(new_model, complete_val_data_dx_date, type = "risk")
+complete_val_data_dx_date$risk_score_new <- predict(new_model, complete_val_data_dx_date, type = "lp")
 summary(complete_val_data_dx_date$risk_score_new)
 #plot
 ggplot(complete_val_data_dx_date, aes(x = risk_score_new)) +
@@ -452,7 +448,7 @@ summary(surv_fit_new, times = seq(0,5)*1)
 
 
 # calculate and classify risk scores in validation cohort:
-complete_val_data_dx_date$risk_score_new <- predict(new_model, complete_val_data_dx_date, type = "risk")
+complete_val_data_dx_date$risk_score_new <- predict(new_model, complete_val_data_dx_date, type = "lp")
 summary(complete_val_data_dx_date$risk_score_new)
 #plot
 ggplot(complete_val_data_dx_date, aes(x = risk_score_new)) +
@@ -467,11 +463,13 @@ ggplot(complete_val_data_dx_date, aes(x = risk_score_new)) +
 
 # Using test_val_data (requires t.os and biomarkers are complete)
 
-test_val_data$risk_score_new <- predict(new_model, test_val_data, type = "risk")
+test_val_data$risk_score_new <- predict(new_model, test_val_data, type = "lp")
 summary(test_val_data$risk_score_new)
 summary(complete_val_data_dx_date$risk_score_new)
 
 #no difference between test_val_data and complete_val_data_dx_date
+
+# Classify into risk groups
 test_val_data$risk_group_new <- ifelse(test_val_data$risk_score_new > risk_med_cutoff_new, 1, 0)
 
 
@@ -499,6 +497,7 @@ summary(surv_fit_new, times = seq(0,5)*1)
 library(dplyr)
 
 #Validation data
+table(test_val_data$risk_group_new)
 
 test_val_data %>%
   group_by(risk_group_new, risk_group) %>%
@@ -540,7 +539,10 @@ library(ggsurvfit)
 
 # Plot with ggsurvplot
 
-surv_fit <- survfit2(Surv(t.os, Outcome) ~ risk_group, data = complete_val_data_dx_date, type = "kaplan-meier") %>%
+table(test_val_data$risk_group)
+summary(test_val_data)
+
+surv_fit <- survfit2(Surv(t.os, Outcome) ~ risk_group, data = test_val_data, type = "kaplan-meier") %>%
   ggsurvfit() +
   add_risktable() +
   add_confidence_interval() +
@@ -682,14 +684,14 @@ surv_fit_new_t
 
 ## Table S11 (includes C-index, sensitivity, PPV, NPV)
 ```{r}
-# Train the biomarker-only model
+# Train the 4-biomarker model
 
 fit_cox_model <- function(data, vars) {
 #  data <- data[complete.cases(data[, c("t.os", "Outcome", vars)]), ]
   cat("Training n =", nrow(data), "\n")
   
   formula <- as.formula(paste("Surv(t.os, Outcome) ~", paste(vars, collapse = " + ")))
-  full_model <- coxph(formula, data = data)
+  full_model <- coxph(formula, data = data, x=T, y=T)
 #  k <- qchisq(0.25, 1, lower.tail = FALSE)  # 1.323
 #  step_model <- step(full_model, direction = "backward", k = k, trace = 1)
   
@@ -723,14 +725,16 @@ complete_training_data$risk_score <- predict(survivin_model, newdata = complete_
 
 # Median split: dichotomize into high- and low-risk groups
 test_val_data$risk_group <- ifelse(test_val_data$risk_score > median(complete_training_data$risk_score, na.rm = TRUE), 1, 0)
+```
 
 
+```{r Old Survival analysis}
 # Survival analysis
 library(survival)
-surv_obj <- Surv(complete_val_data_dx_date$t.os, complete_val_data_dx_date$Outcome)
-surv_fit <- survfit(surv_obj ~ risk_group, data = complete_val_data_dx_date)
+surv_obj <- Surv(test_val_data$t.os, test_val_data$Outcome)
+surv_fit <- survfit(surv_obj ~ risk_group, data = test_val_data)
 summary(surv_fit)
-survdiff(surv_obj ~ risk_group, data = complete_val_data_dx_date)  # Log-rank test
+survdiff(surv_obj ~ risk_group, data = test_val_data)  # Log-rank test
 
 plot(surv_fit, col = c("blue", "red"), main = "Survival by Risk Group", xlab = "Time (t.os)", ylab = "Survival Probability", xlim = c(0,5))
 legend("topright", c("Low Risk", "High Risk"), col = c("blue", "red"), lty = 1)
@@ -743,7 +747,7 @@ surv_fit <- survfit(Surv(t.os, Outcome) ~ risk_group, data = complete_val_data_d
 # Plot with ggsurvplot
 ggsurvplot(
   surv_fit,
-  data = complete_val_data_dx_date,
+  data = test_val_data,
   xlim = c(0, 5),                   # restrict x-axis to 5 years
   break.time.by = 1,
   xlab = "Time (years)",
@@ -770,7 +774,7 @@ surv_fit
 ```{r}
 # Cox model for HR, CI, p-value for validation data — 4-biomarker model
 
-cox_model <- coxph(Surv(t.os, Outcome) ~ risk_group, data = test_val_data)
+cox_model <- coxph(Surv(t.os, Outcome) ~ risk_group, data = test_val_data, x=T, y=T)
 cox_summary <- summary(cox_model)
 print(cox_summary$coefficients)  # See row/col names
 coef <- cox_summary$coefficients["risk_group", "coef"]
@@ -801,7 +805,7 @@ hr1[c(1,4,5,6)]
 
 #HR using training data:
 
-complete_training_data$risk_score <- predict(survivin_model, newdata = complete_training_data, type = "risk")
+complete_training_data$risk_score <- predict(survivin_model, newdata = complete_training_data, type = "lp")
 
 # Median split: dichotomize into high- and low-risk groups
 complete_training_data$risk_group <- ifelse(complete_training_data$risk_score > median(complete_training_data$risk_score, na.rm = TRUE), 1, 0)
@@ -824,7 +828,7 @@ cox_risk_analysis <- function(data, time_col = "t.os", event_col = "Outcome", gr
   
   # Cox model
   formula <- as.formula(paste("Surv(", time_col, ",", event_col, ") ~", group_col))
-  cox_model <- coxph(formula, data = data)
+  cox_model <- coxph(formula, data = data, x=T, y=T)
   cox_summary <- summary(cox_model)  
   
   # Extract results
@@ -853,19 +857,29 @@ results_val <- cox_risk_analysis(test_val_data, time_col = "t.os",
 
 ```
 
+# Create dataset for censoring up to 5 years
+```{r}
+test_val_data %>%
+  filter(t.os <= 5) %>%
+  nrow(.)
+
+
+```
+
+
 
 # Cox model, 3-biomarker model
 ```{r}
 # Cox model for HR, CI, p-value for validation data — 3-biomarker model
 
 #Risk scores
-test_val_data$risk_score_new <- predict(new_model, newdata = test_val_data, type = "risk")
+test_val_data$risk_score_new <- predict(new_model, newdata = test_val_data, type = "lp")
 
 # Median split: dichotomize into high- and low-risk groups
 test_val_data$risk_group_new <- ifelse(test_val_data$risk_score_new > median(complete_training_data$risk_score_new, na.rm = TRUE), 1, 0)
 
 
-cox_model_new <- coxph(Surv(t.os, Outcome) ~ risk_group_new, data = test_val_data)
+cox_model_new <- coxph(Surv(t.os, Outcome) ~ risk_group_new, data = test_val_data, x=T, y=T)
 
 cox_summary_new <- summary(cox_model_new)
 print(cox_summary_new$coefficients)  # See row/col names
@@ -1162,10 +1176,344 @@ get_uno_auc(test_val_data, timepoint = 4.99, marker_var = "lp3")
 
 
 ```
+# Mean calibration
+observed/expected ratio for fixed time point of 5 years, estimated with Observed:Expected ratio.
+Observed -> the complement of the Kaplan-Meier curve at t=5y. 
+Expected -> average predicted risk of the event at 5y. 
+```{r Mean calibration}
 
-# Moderate Calibration
+# -survivin 3-biomarker model
+library(pacman)
+pacman::p_load(survival,
+               Hmisc,
+               riskRegression)
+t_horizon <- 5
+# Observed
+obj <- summary(survfit(
+  Surv(t.os, Outcome) ~ 1, 
+  data = test_val_data),
+  times = t_horizon)
 
+obs_t <- 1 - obj$surv
+
+# Predicted risk 
+test_val_data$pred_risk_5y <- riskRegression::predictRisk(new_model,
+                                          newdata = test_val_data,
+                                          times = t_horizon)
+# Expected: mean risk at 5 y
+exp_t <- mean(test_val_data$pred_risk_5y)
+
+# Observed / Expected ratio
+OE_t <- obs_t / exp_t
+
+alpha <- .05
+OE_summary <- c(
+  "OE" = OE_t,
+  "2.5 %" = OE_t * exp(-qnorm(1 - alpha / 2) * sqrt(1 / obj$n.event)),
+  "97.5 %" = OE_t * exp(+qnorm(1 - alpha / 2) * sqrt(1 / obj$n.event))
+)
+
+OE_summary
+
+#O:E ratio is 1.19 (0.95-1.49) for the -survivin 3-biomarker model at 5 years
+
+#+survivin 4-biomarker model
+
+# Predicted risk 
+test_val_data$pred_risk_5y_survivin <- riskRegression::predictRisk(survivin_model,
+                                          newdata = test_val_data,
+                                          times = t_horizon)
+# Expected: mean risk at 5 y
+exp_t_survivin <- mean(test_val_data$pred_risk_5y_survivin)
+
+# Observed / Expected ratio
+OE_t_survivin <- obs_t / exp_t_survivin
+
+alpha <- .05
+OE_summary_survivin <- c(
+  "OE" = OE_t_survivin,
+  "2.5 %" = OE_t * exp(-qnorm(1 - alpha / 2) * sqrt(1 / obj$n.event)),
+  "97.5 %" = OE_t * exp(+qnorm(1 - alpha / 2) * sqrt(1 / obj$n.event))
+)
+
+OE_summary_survivin
+
+#O:E ratio is 1.15 (0.92-1.44) for the +survivin 4-biomarker model
+
+```
+
+# Weak Calibration
+Calibration slope for a fixed time point (5y)
+
+```{r Weak calibration}
+
+# Creating 5-year-censored dataset, val_5yr, from test_val_data
+temp <- survSplit(Surv(t.os, Outcome) ~ ., data = test_val_data, cut = 5, episode = "epoch")
+val_5yr <- subset(temp, epoch == 1)
+
+#Try val_5yr instead of test_val_data for weak calibration:
+
+# Fit the 4-biomarker +survivin model (training data):
+survivin_cal_fit <- coxph(Surv(t.os, Outcome) ~ p16_binary + Survivin + HPVISHHR + TILS,
+  data = complete_training_data, 
+  x = T, 
+  y = T)
+
+# Fit the 3-biomarker -survivin model:
+new_cal_fit  <- update(survivin_cal_fit, . ~ . -Survivin)
+
+# 4-biomarker model:
+# Add linear predictor in the validation set
+val_5yr$lp_survivin_calibration <- predict(survivin_cal_fit, newdata = val_5yr)
+
+gval_survivin <- coxph(Surv(t.os, Outcome) ~ lp_survivin_calibration, data = val_5yr)
+
+survivin_calslope_summary <- c(
+  "calibration slope" = gval_survivin$coef,
+  "2.5 %"  = gval_survivin$coef - qnorm(1 - alpha / 2) * sqrt(gval_survivin$var),
+  "97.5 %" = gval_survivin$coef + qnorm(1 - alpha / 2) * sqrt(gval_survivin$var)
+)
+
+survivin_calslope_summary
+
+# 3-biomarker model:
+# Add linear predictor in the validation set
+val_5yr$lp_new_calibration <- predict(new_cal_fit, newdata = val_5yr)
+
+gval_new <- coxph(Surv(t.os, Outcome) ~ lp_new_calibration, data = val_5yr)
+
+new_calslope_summary <- c(
+  "calibration slope" = gval_new$coef,
+  "2.5 %"  = gval_new$coef - qnorm(1 - alpha / 2) * sqrt(gval_new$var),
+  "97.5 %" = gval_new$coef + qnorm(1 - alpha / 2) * sqrt(gval_new$var)
+)
+
+new_calslope_summary
+survivin_calslope_summary
+
+
+```
+
+
+# Moderate Calibration - assess whether observed event rate matches the predicted risk within subgroups of patients wiht similar predicted risk levels
+Moderate calibration at fixed time point can be assessed using flexible calibration curve, complemented with ICI, E50, E90 as suggested by Austin et al.
+
++ Calibration curve is a graphical representation of moderate calibration. It shows:  
+      
+  + on the *x-axis* the predicted survival (or risk) probabilities at a fixed time horizon (e.g. at 5 years);  
+      
+  + on the *y-axis* the observed survival (or risk) probabilities at a fixed time horizon (e.g. at 5 years);  
+      
+  + The 45-degree line indicates perfect calibration. 
+      Points below the 45-degree line indicate that the model overestimates the observed risk. 
+      If points are above the 45-degree line, the model underestimate the observed risk;
+      The observed probabilities estimated by the Kaplan-Meier curves (in case of survival) or by the complementary of the Kaplan-Meier curves (in case of risk) are represented in terms of percentiles of the predicted survival (risk) probabilities.
+      
++ Integrated Calibration Index (ICI) is the weighted mean of absolute difference between smoothed observed proportions and predicted probabilities in which observations are weighted by the empirical density function of the predicted probabilities;  
+
++ E50 and E90 denote the median and the 90th percentile of the absolute differences between observed and predicted probabilities of the outcome at time *t*;  
+
+
+```{r Moderate calibration, +survivin}
+
+# Flexible calibration curve, with ICI, E50, E90
+
+if (!require("pacman")) install.packages("pacman")
+library(pacman)
+pacman::p_load(survival,
+               Hmisc,
+               rms)
+
+# +survivin model
+sfit <- coxph(Surv(t.os, Outcome) ~ p16_binary + Survivin + HPVISHHR + TILS,
+  data = complete_training_data, 
+  x = T, 
+  y = T)
+
+# curve:
+val_5yr$pred_survivin <- riskRegression::predictRisk(sfit, 
+                         newdata = val_5yr, 
+                         times = 5)
+
+val_5yr$pred_survivin.cll <- log(-log(1 - val_5yr$pred_survivin))
+
+
+# Estimate actual risk
+vcal_s <- rms::cph(Surv(t.os, Outcome) ~ rcs(pred_survivin.cll, 3),
+                 x = T,
+                 y = T,
+                 surv = T,
+                 data = val_5yr
+) 
+
+dat_cal_s <- cbind.data.frame(
+  "obs" = 1 - rms::survest(vcal_s,
+                           times = 5,
+                           newdata = val_5yr)$surv,
+  
+  "lower" = 1 - rms::survest(vcal_s,
+                             times = 5,
+                             newdata = val_5yr)$upper,
+  
+  "upper" = 1 - rms::survest(vcal_s,
+                             times = 5,
+                             newdata = val_5yr)$lower,
+  "pred" = val_5yr$pred_survivin
+)
+
+dat_cal_s <- dat_cal_s[order(dat_cal_s$pred), ]
+
+# Numerical measures
+absdiff_cph_s <- abs(dat_cal_s$pred - dat_cal_s$obs)
+
+numsum_cph_s <- c(
+  "ICI" = mean(absdiff_cph_s),
+  setNames(quantile(absdiff_cph_s, c(0.5, 0.9)), c("E50", "E90")),
+  "Emax" = max(absdiff_cph_s)
+)
+numsum_cph_s
+
+# ggplot version, 4-biomarker model
+ggplot(dat_cal_s, aes(x = pred, y = obs)) +
+  geom_line(aes(color = "Calibration curve", linetype = "Calibration curve"), linewidth = 1) +
+  geom_line(aes(y = lower, color = "95% CI", linetype = "95% CI"), linewidth = 0.5) +
+  geom_line(aes(y = upper, color = "95% CI", linetype = "95% CI"), linewidth = 0.5) +
+  geom_abline(aes(intercept = 0, slope = 1, color = "Ideal calibration", linetype = "Ideal calibration"), 
+              linewidth = 1) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  scale_color_manual(values = c("Calibration curve" = "black", 
+                               "95% CI" = "black", 
+                               "Ideal calibration" = "red")) +
+  scale_linetype_manual(values = c("Calibration curve" = "solid", 
+                                  "95% CI" = "dashed", 
+                                  "Ideal calibration" = "dashed")) +
+  labs(x = "Predicted 5-Year OS Risk (4-Biomarker Model)",
+       y = "Observed 5-Year OS Risk",
+       title = "Calibration Curve: 4-Biomarker Model") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 8),
+        axis.title = element_text(size = 10),
+        axis.text = element_text(size = 8),
+        panel.grid.minor = element_blank(),
+        axis.ticks = element_line(color = "black"),
+        axis.line = element_line(color = "black")) +
+  guides(color = guide_legend(override.aes = list(linewidth = c(1, 0.5, 1))))
+
+```
+
+```{r Moderate calibration, -survivin}
+
+if (!require("pacman")) install.packages("pacman")
+library(pacman)
+pacman::p_load(survival,
+               Hmisc,
+               rms)
+# -survivin model
+
+new_fit <- coxph(Surv(t.os, Outcome) ~ p16_binary + HPVISHHR + TILS,
+  data = complete_training_data, 
+  x = T, 
+  y = T)
+
+# curve:
+val_5yr$pred_new <- riskRegression::predictRisk(new_fit, 
+                         newdata = val_5yr, 
+                         times = 5)
+
+val_5yr$pred_new.cll <- log(-log(1 - val_5yr$pred_new))
+
+
+# Estimate actual risk
+vcal_new <- rms::cph(Surv(t.os, Outcome) ~ rcs(pred_new.cll, 3),
+                 x = T,
+                 y = T,
+                 surv = T,
+                 data = val_5yr
+) 
+
+dat_cal_new <- cbind.data.frame(
+  "obs" = 1 - rms::survest(vcal_new,
+                           times = 5,
+                           newdata = val_5yr)$surv,
+  
+  "lower" = 1 - rms::survest(vcal_new,
+                             times = 5,
+                             newdata = val_5yr)$upper,
+  
+  "upper" = 1 - rms::survest(vcal_new,
+                             times = 5,
+                             newdata = val_5yr)$lower,
+  "pred" = val_5yr$pred_new
+)
+
+dat_cal_new <- dat_cal_new[order(dat_cal_new$pred), ]
+
+
+# Numerical measures
+absdiff_cph_new <- abs(dat_cal_new$pred - dat_cal_new$obs)
+
+numsum_cph_new <- c(
+  "ICI" = mean(absdiff_cph_new),
+  setNames(quantile(absdiff_cph_new, c(0.5, 0.9)), c("E50", "E90")),
+  "Emax" = max(absdiff_cph_new)
+)
+numsum_cph_new
+
+# ggplot version, 3-biomarker model
+ggplot(dat_cal_new, aes(x = pred, y = obs)) +
+  geom_line(aes(color = "Calibration curve", linetype = "Calibration curve"), linewidth = 1) +
+  geom_line(aes(y = lower, color = "95% CI", linetype = "95% CI"), linewidth = 0.5) +
+  geom_line(aes(y = upper, color = "95% CI", linetype = "95% CI"), linewidth = 0.5) +
+  geom_abline(aes(intercept = 0, slope = 1, color = "Ideal calibration", linetype = "Ideal calibration"), 
+              linewidth = 1) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2)) +
+  scale_color_manual(values = c("Calibration curve" = "black", 
+                               "95% CI" = "black", 
+                               "Ideal calibration" = "red")) +
+  scale_linetype_manual(values = c("Calibration curve" = "solid", 
+                                  "95% CI" = "dashed", 
+                                  "Ideal calibration" = "dashed")) +
+  labs(x = "Predicted 5-Year OS Risk (3-Biomarker Model)",
+       y = "Observed 5-Year OS Risk",
+       title = "Calibration Curve: 3-Biomarker Model") +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 8),
+        axis.title = element_text(size = 10),
+        axis.text = element_text(size = 8),
+        panel.grid.minor = element_blank(),
+        axis.ticks = element_line(color = "black"),
+        axis.line = element_line(color = "black")) +
+  guides(color = guide_legend(override.aes = list(linewidth = c(1, 0.5, 1))))
+
+```
+
+#  Agreement between +survivin and -survivin models
 ```{r}
+
+plot_data <- val_5yr %>%
+  select(pred_new, pred_survivin)
+
+n <- nrow(plot_data)
+r <- cor(plot_data$pred_survivin, plot_data$pred_new) # Pearson correlation = 0.976
+# Fisher’s Z transformation
+z <- atanh(r) # or 0.5 * log((1 + r) / (1 - r))
+se_z <- 1 / sqrt(n - 3)
+z_lower <- z - qnorm(0.975) * se_z # 1.96 for 95% CI
+z_upper <- z + qnorm(0.975) * se_z
+
+# Transform back to correlation scale
+r_lower <- tanh(z_lower) # or (exp(2 * z_lower) - 1) / (exp(2 * z_lower) + 1)
+r_upper <- tanh(z_upper)
+
+# Print 95% CI
+cat("Pearson correlation (95% CI):", round(r,3), ", (", round(r_lower, 3), "-", round(r_upper, 3), ")", "\n")
+
 
 ```
 
