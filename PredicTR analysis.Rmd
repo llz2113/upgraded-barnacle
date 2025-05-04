@@ -1518,29 +1518,194 @@ cat("Pearson correlation (95% CI):", round(r,3), ", (", round(r_lower, 3), "-", 
 ```
 
 
-# PPV, NPV, sensitivity
+# PPV, NPV, sensitivity for 4-biomarker model
 
 ```{r}
 
 # Four-biomarker model
-# contingency table for PPV, NPV, sensitivity calculations
-table_pred <- table(Predicted = complete_val_data_dx_date$risk_group, Actual = complete_val_data_dx_date$Outcome)
-TP <- table_pred[2,2]; FP <- table_pred[2,1]; TN <- table_pred[1,1]; FN <- table_pred[1,2]
-print(sens <- TP/(TP+FN))
-print(PPV <- TP/(TP+FP))
-print(NPV <- TN/(TN+FN))
 
-# Three-biomarker model
-# contingency table for PPV, NPV, sensitivity calculations
-table_pred <- table(Predicted = complete_val_data_dx_date$risk_group_new, Actual = complete_val_data_dx_date$Outcome)
-TP <- table_pred[2,2]; FP <- table_pred[2,1]; TN <- table_pred[1,1]; FN <- table_pred[1,2]
-print(sens <- TP/(TP+FN))
-print(PPV <- TP/(TP+FP))
-print(NPV <- TN/(TN+FN))
+eval_data <- val_5yr %>%
+  mutate(true_label = ifelse(Outcome == 1 & t.os <=5, 1, 0))
 
-table_pred
+table(eval_data$true_label)
+table(eval_data$risk_group)
+
+TP <- sum(eval_data$risk_group == 1 & eval_data$true_label == 1)
+FP <- sum(eval_data$risk_group == 1 & eval_data$true_label == 0)
+TN <- sum(eval_data$risk_group == 0 & eval_data$true_label == 0)
+FN <- sum(eval_data$risk_group == 0 & eval_data$true_label == 1)
+
+sensitivity <- TP / (TP + FN)
+PPV <- TP / (TP + FP)
+NPV <- TN / (TN + FN)
+cat("Four-biomarker model:", "\n", "Sensitivity: ", sensitivity, "\n", "PPV:", PPV, "\n", "NPV:", NPV)
+
+# 95% CIs
+compute_metrics <- function(data) {
+  TP <- sum(data$risk_group == 1 & data$true_label == 1)
+  FP <- sum(data$risk_group == 1 & data$true_label == 0)
+  TN <- sum(data$risk_group == 0 & data$true_label == 0)
+  FN <- sum(data$risk_group == 0 & data$true_label == 1)
+  
+  sensitivity <- ifelse((TP + FN) == 0, NA, TP / (TP + FN))
+  PPV <- ifelse((TP + FP) == 0, NA, TP / (TP + FP))
+  NPV <- ifelse((TN + FN) == 0, NA, TN / (TN + FN))
+  
+  return(c(sensitivity = sensitivity, PPV = PPV, NPV = NPV))
+}
+
+set.seed(123)  # for reproducibility
+n_boot <- 1000
+boot_metrics <- replicate(n_boot, {
+  boot_sample <- eval_data[sample(1:nrow(eval_data), replace = TRUE), ]
+  compute_metrics(boot_sample)
+})
+boot_metrics_df <- as.data.frame(t(boot_metrics))
+
+# 95% CI using percentiles of 4-biomarker model
+ci_results <- apply(boot_metrics_df, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
+ci_results
+
 
 ```
+# PPV, NPV, sensitivity for 3-biomarker model
+```{r}
+# Three-biomarker model
+
+eval_data <- val_5yr %>%
+  mutate(true_label = ifelse(Outcome == 1 & t.os <=5, 1, 0))
+
+table(eval_data$true_label)
+table(eval_data$risk_group_new)
+
+TP <- sum(eval_data$risk_group_new == 1 & eval_data$true_label == 1)
+FP <- sum(eval_data$risk_group_new == 1 & eval_data$true_label == 0)
+TN <- sum(eval_data$risk_group_new == 0 & eval_data$true_label == 0)
+FN <- sum(eval_data$risk_group_new == 0 & eval_data$true_label == 1)
+
+sensitivity <- TP / (TP + FN)
+PPV <- TP / (TP + FP)
+NPV <- TN / (TN + FN)
+cat("Three-biomarker model:", "\n", "Sensitivity: ", sensitivity, "\n", "PPV:", PPV, "\n", "NPV:", NPV)
+
+compute_metrics_new <- function(data) {
+  TP <- sum(data$risk_group_new == 1 & data$true_label == 1)
+  FP <- sum(data$risk_group_new == 1 & data$true_label == 0)
+  TN <- sum(data$risk_group_new == 0 & data$true_label == 0)
+  FN <- sum(data$risk_group_new == 0 & data$true_label == 1)
+  
+  sensitivity <- ifelse((TP + FN) == 0, NA, TP / (TP + FN))
+  PPV <- ifelse((TP + FP) == 0, NA, TP / (TP + FP))
+  NPV <- ifelse((TN + FN) == 0, NA, TN / (TN + FN))
+  
+  return(c(sensitivity = sensitivity, PPV = PPV, NPV = NPV))
+}
+
+set.seed(123)  # for reproducibility
+n_boot <- 1000
+boot_metrics <- replicate(n_boot, {
+  boot_sample <- eval_data[sample(1:nrow(eval_data), replace = TRUE), ]
+  compute_metrics_new(boot_sample)
+})
+boot_metrics_df <- as.data.frame(t(boot_metrics))
+
+# 95% CI using percentiles of 3-biomarker model
+ci_results <- apply(boot_metrics_df, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
+ci_results
+
+```
+
+# Brier score - recommended overall performance measure
+Brier score is the mean squared difference between observed event indicators and predicted risks at a fixed time point (5y here), lower is better
+Scaled Brier score, aka Index of Prediction Accuracy (IPA) scales the Brier score (decrease in Brier vs. null model). Expressed as percentage; higher is better.
+```{r Brier score and IPA, 5 y}
+library(pacman)
+pacman::p_load(survival,
+               Hmisc,
+               riskRegression)
+
+# Fit the 4-biomarker model
+s_fit <- coxph(Surv(t.os, Outcome) ~ Survivin + p16_binary + HPVISHHR + TILS,
+  data = complete_training_data, 
+  x = T, 
+  y = T)
+# Fit the 3-biomarker model
+new_fit <- coxph(Surv(t.os, Outcome) ~ p16_binary + HPVISHHR + TILS,
+  data = complete_training_data, 
+  x = T, 
+  y = T)
+
+# Brier Score and IPA in the validation set (+survivin model)
+
+score_s <- brier(s_fit, times = c(3,5), newdata = test_val_data)
+# Original model Brier score = 0.221
+score_n <- brier(new_fit, times = c(3,5), newdata = test_val_data)
+#Brier score = 0.220
+
+score_s
+score_n
+
+#install.packages("SurvMetrics")
+
+library(SurvMetrics)
+#calculate the Brier Score
+med_index = median(1:length(dis_time))
+surv_obj = Surv(test_data$time, test_data$status)
+t_star = median(fitrsf$time.interest)
+
+# Predict survival probabilities at 5 years
+times <- 5 # Or 4.99 to match prior code
+surv_prob_s <- predictSurvProb(s_fit, newdata = val_5yr, times = times)
+surv_prob_new <- predictSurvProb(new_fit, newdata = val_5yr, times = times)
+  
+# Create survival object
+surv_obj <- Surv(val_5yr$t.os, val_5yr$Outcome)
+
+# Calculate Brier score
+brier_s <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_s, t_star = times)
+brier_new <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_new, t_star = times)
+
+# Store results
+data_BS <- data.frame(
+  BS = c(brier_s, brier_new),
+  Model = c("4-Biomarker", "3-Biomarker")
+)
+
+# Print results
+cat("Brier Scores:\n")
+data_BS
+
+
+# IPA:
+# Fit null model (Kaplan-Meier equivalent)
+null_fit <- coxph(Surv(t.os, Outcome) ~ 1, data = complete_training_data, 
+                  x = TRUE, y = TRUE)
+surv_prob_null <- predictSurvProb(null_fit, newdata = test_val_5yr, times = times)
+
+# Calculate Brier scores
+brier_s <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_s, t_star = times)
+brier_new <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_new, t_star = times)
+brier_null <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_null, t_star = times)
+
+# Calculate IPA
+ipa_s <- 1 - brier_s / brier_null
+ipa_new <- 1 - brier_new / brier_null
+
+# Store results
+data_metrics <- data.frame(
+  Model = c("4-Biomarker", "3-Biomarker", "Null"),
+  Brier = c(brier_s, brier_new, brier_null),
+  IPA = c(ipa_s, ipa_new, NA) # IPA not applicable for null model
+)
+
+# Print results
+cat("Brier Scores and IPA:\n")
+data_metrics
+
+```
+
+
+
 ## Surgery vs no surgery in high-risk and low-risk patient groups, validation cohort
 ```{r}
 # summary(complete_val_data$Surgery) #total: 212. Paper (Fig 3C): 221
