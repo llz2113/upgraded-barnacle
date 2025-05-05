@@ -2179,3 +2179,365 @@ high_summary
 ```
 
 
+#DCA for clinical utility
+
+```{r DCA}
+
+if (!require("pacman")) install.packages("pacman")
+library(pacman)
+pacman::p_load(here, survival, Hmisc, rmda, ggscidca)
+
+# Run the function to calculate the net benefit and the elements needed to develop decision curve analysis
+
+
+t_horizon <- 5
+
+
+
+# 4-biomarker model: sfit. 3-biomarker model: new_fit
+# Predicted risks are stored in test_val_data$pred_risk_5y_survivin and test_val_data$pred_risk_5y, respectively
+
+# Run decision curve analysis
+
+# Validation data, 5-year
+# 4-biomarker model
+
+val_5_df <- as.data.frame(test_val_5)
+dca_surv <- stdca(
+  data = val_5_df, 
+  outcome = "Outcome", 
+  ttoutcome = "t.os",
+  timepoint = 5, 
+  predictors = "pred_risk_5y_survivin", 
+  xstop = 1.0,
+  ymin = -0.01, 
+  graph = FALSE
+)
+
+# Decision curves plot
+
+# Smoothing DCA
+dca_surv_smooth <- smooth(dca_surv$net.benefit$pred
+                           [!is.na(dca_surv$net.benefit$pred)],
+                           twiceit = TRUE)
+dca_surv_smooth <- c(dca_surv_smooth, 
+                      rep(NA, sum(is.na(dca_surv$net.benefit$pred))))
+
+par(xaxs = "i", yaxs = "i", las = 1)
+plot(dca_surv$net.benefit$threshold,
+  dca_surv_smooth,
+  type = "l", 
+  lwd = 1,
+  lty = 1,
+  xlab = "Threshold probability in %", 
+  ylab = "Net Benefit",
+  xlim = c(0, 1), 
+  ylim = c(-0.10, 0.60), 
+  bty = "n",
+  cex.lab = 1.2, 
+  cex.axis = 1,
+  col = 4
+)
+lines(dca_surv$net.benefit$threshold, 
+      dca_surv$net.benefit$none, 
+      type = "l", 
+      lwd = 1, 
+      lty = 4,
+      col = 8)
+lines(dca_surv$net.benefit$threshold, 
+      dca_surv$net.benefit$all, 
+      type = "l", 
+      lwd = 1, 
+      col = 2)
+legend("topright",
+  c(
+    "Treat All",
+    "Four-biomarker model: P(recurren)",
+    "Treat None"
+  ),
+  lty = c(1, 1, 1), 
+  lwd = 1, 
+  col = c(2, 4, 8),
+  bty = "n"
+)
+
+# read off at 23% threshold
+dca_surv$net.benefit[dca_surv$net.benefit$threshold == 0.23, ]
+
+
+
+
+
+```
+
+```{r DCA, 3-biomarker model}
+
+
+# 4-biomarker model: sfit. 3-biomarker model: new_fit
+# Predicted risks are stored in test_val_data$pred_risk_5y_survivin and test_val_data$pred_risk_5y, respectively
+
+# Run decision curve analysis
+
+# Validation data, 5-year
+# 3-biomarker model
+
+val_5_df <- as.data.frame(test_val_5)
+dca_new <- stdca(
+  data = val_5_df, 
+  outcome = "Outcome", 
+  ttoutcome = "t.os",
+  timepoint = 5, 
+  predictors = "pred_risk_5y", 
+  xstop = 1.0,
+  ymin = -0.01, 
+  graph = FALSE
+)
+
+# Decision curves plot
+
+# Smoothing DCA
+dca_new_smooth <- smooth(dca_new$net.benefit$pred
+                           [!is.na(dca_new$net.benefit$pred)],
+                           twiceit = TRUE)
+dca_new_smooth <- c(dca_new_smooth, 
+                      rep(NA, sum(is.na(dca_new$net.benefit$pred))))
+
+par(xaxs = "i", yaxs = "i", las = 1)
+plot(dca_new$net.benefit$threshold,
+  dca_new_smooth,
+  type = "l", 
+  lwd = 1,
+  lty = 1,
+  xlab = "Threshold probability in %", 
+  ylab = "Net Benefit",
+  xlim = c(0, 1), 
+  ylim = c(-0.10, 0.60), 
+  bty = "n",
+  cex.lab = 1.2, 
+  cex.axis = 1,
+  col = 4
+)
+lines(dca_new$net.benefit$threshold, 
+      dca_new$net.benefit$none, 
+      type = "l", 
+      lwd = 1, 
+      lty = 1,
+      col = 8)
+lines(dca_new$net.benefit$threshold, 
+      dca_new$net.benefit$all, 
+      type = "l", 
+      lwd = 1, 
+      col = 2)
+legend("topright",
+  c(
+    "Treat All",
+    "Three-biomarker model)",
+    "Treat None"
+  ),
+  lty = c(1, 1, 1), 
+  lwd = 1, 
+  col = c(2, 4, 8),
+  bty = "n"
+)
+
+# read off at 23% threshold
+dca_surv$net.benefit[dca_surv$net.benefit$threshold == 0.23, ]
+
+
+```
+```{r}
+# Optional smoothing
+smooth_curve <- function(x) {
+  sm <- smooth(x[!is.na(x)], twiceit = TRUE)
+  c(sm, rep(NA, sum(is.na(x))))
+}
+
+surv_smooth <- smooth_curve(dca_surv$net.benefit$pred)
+new_smooth <- smooth_curve(dca_new$net.benefit$pred)
+
+# Plot combined curves
+par(xaxs = "i", yaxs = "i", las = 1)
+plot(dca_surv$net.benefit$threshold,
+     surv_smooth,
+     type = "l",
+     lwd = 2,
+     col = "blue",
+     xlab = "Threshold probability",
+     ylab = "Net Benefit",
+     xlim = c(0, 1),
+     ylim = c(-0.10, 0.60),
+     bty = "n",
+     cex.lab = 1.2,
+     cex.axis = 1)
+
+lines(dca_new$net.benefit$threshold,
+      new_smooth,
+      type = "l",
+      lwd = 2,
+      col = "darkgreen")
+
+# Treat all and treat none (same in both models, pick one)
+lines(dca_surv$net.benefit$threshold,
+      dca_surv$net.benefit$all,
+      type = "l",
+      lwd = 1,
+      lty = 2,
+      col = "red")
+
+lines(dca_surv$net.benefit$threshold,
+      dca_surv$net.benefit$none,
+      type = "l",
+      lwd = 1,
+      lty = 3,
+      col = "black")
+
+legend("topright",
+       legend = c("4-biomarker model", "3-biomarker model", "Treat All", "Treat None"),
+       col = c("blue", "darkgreen", "red", "black"),
+       lty = c(1, 1, 2, 3),
+       lwd = c(2, 2, 1, 1),
+       bty = "n")
+
+```
+```{r Comparing decision curves with nbdiff}
+# There are nine arguments in the ntbft() function:
+# 
+#     data: a data frame on which the prediction model is trained.
+#     outcome: a character string indicting the name of the outcome or disease status.
+#     frm: a formula in the form of outcome~predictor 1 + predictor 2, where each variable should be the contained in the data frame. The argument specifies the prediction model to be fitted in case the argument pred below is NULL (if the pred argument is provided, frm is not used).
+#     exterdt: a data frame to specify whether the prediction should be made in external dataset; this is useful for cross validation of the model. By default, the value is NULL, indicating the prediction is made in the same dataset as the training dataset.
+#     pred: a vector of predicted values to be used to calculate the net benefit. By default, the value is NULL, indicating that such predicted values should be calculated by the routine using the model specified by frm.
+#     xstart: the starting point of the threshold probability, the default value is 0.01.
+#     xstop: the end point of the threshold probability, the default value is 0.99.
+#     step: a numerical value specifying the incremental step of the threshold probability, the default value is 0.01.
+#     type: controls the type of net benefit to be computed. The allowed values correspond to the treated (“treated”), untreated (“untreated”) and overall (“overall”) patients, or to the ADAPT index (“adapt”). The default is the “treated”.
+
+ntbft <- function(data, outcome, frm=NULL, exterdt=NULL, pred=NULL, xstart=0.01, xstop = 0.99, step=0.01, type = "treated") {
+  
+  pt <- seq(from=xstart, to=xstop, by=step)
+  lpt <- length(pt)
+  
+  if(type == "treated")
+    coef <- cbind(rep(1, lpt), rep(0, lpt))
+  if(type == "untreated")
+    coef <- cbind(rep(0, lpt), rep(1, lpt))
+  if(type == "overall")
+    coef <- cbind(rep(1, lpt), rep(1, lpt))
+  if(type == "adapt")
+    coef <- cbind(1-pt, pt)
+  
+  response <- as.vector(t(data[outcome]))
+  if(is.data.frame(exterdt))
+    response <- as.vector(t(exterdt[outcome]))
+  event.rate <- mean(response)
+  nball <- event.rate - (1-event.rate)*pt/(1-pt)
+  nbnone <- 1-event.rate-event.rate*(1-pt)/pt
+  
+  if(is.null(pred)) {
+    model <- glm(frm, data=data, family=binomial("logit"))
+    pred <- model$fitted.values
+  
+  if(is.data.frame(exterdt))
+    pred <- predict(model, newdata=exterdt, type = "response")
+  }
+  
+  #pred and response should be of same length
+  
+  N <- length(pred)
+  nbt <- rep(NA,lpt)
+  nbu <- rep(NA, lpt)
+  
+  for(t in 1:lpt) {
+    tp <- sum(pred>= pt[t] & response == 1)
+    fp <- sum(pred>= pt[t] & response == 0)
+    fn <- sum(pred < pt[t] & response == 1)
+    tn <- sum(pred < pt[t] & response == 0)
+    
+    nbt[t] <- tp/N - fp/N*(pt[t]/(1-pt[t]))
+    nbu[t] <- tn/N - fn/N*((1-pt[t])/pt[t])
+  }
+  
+  nb <- data.frame(pt)
+  names(nb) <- "threshold"
+  nb["all"] <- -coef[,1]*nball
+  nb["none"] <- -coef[,2]*nbnone
+  nb["pred"] <- -coef[,1]*nbt + coef[,2]*nbu
+  return(nb)
+  
+}
+
+
+nbdiff <- function(data, ii, outcome, frml, frm2, xstart = 0.01, xstop = 0.99, step = 0.01, type = "treated") {
+  
+  dd <- data[ii,]
+  nb1 <- ntbft(data = dd, outcome = outcome, frm = frm1, xstart=xstart, xstop = xstop, step = step, type = type)
+  nb2 <- ntbft(data = dd, outcome = outcome, frm = frm2, xstart=xstart, xstop = xstop, step = step, type = type)
+  
+  nb.diff <- nb2$pred-nbl$pred
+  cat(".")
+  return(nb.diff)
+  
+}
+
+model1 <- Outcome ~ p16_binary + Survivin + HPVISHHR + TILS
+model2 <- Outcome ~ p16_binary + HPVISHHR + TILS
+
+nb.survivin <- ntbft(data = val_5_df, outcome = "Outcome", frm = model1, pred = val_5_df$pred_risk_5y_survivin)
+nb.new <- ntbft(data = val_5_df, outcome = "Outcome", frm = model2, pred = val_5_df$pred_risk_5y)
+
+#Plot:
+
+# There are six arguments in the plot.ntbft() function:
+# 
+#     nb: a data frame of net benefit, where the first column contains the threshold probabilities and the next columns contains the net benefit achieved for different models.
+#     nolines: the number of the columns of nb which should be plotted using lines. The default is to plot all columns (except the first one containing the threshold).
+#     nobands: the number of the columns of nb which should be plotted using bands (useful to plot confidence intervals). The default is to plot no bands.
+#     ymin: the minimum of net benefit to be plotted. The default is −0.1.
+#     ymax: the maximum of net benefit to be plotted. The default is the maximum of the net benefits which are plotted either via lines or via bands.
+#     legpos: a vector of two coordinates indicating where the legend should be in the graph.
+
+
+
+plot.ntbft <- function(nb, nolines = 2:dim(nb)[2], nobands = NULL, ymin = -0.5, ymax = max(nb[,c(nolines, nobands)], na.rm=T), legpos = c(0.9,0.8)) {
+  
+  ylow <- nb[,1]
+  yup <- nb[,1]
+  if(!is.null(nobands)){
+    ylow <- nb[,min(nobands)]
+    yup <- nb[,max(nobands)]
+  }
+  nb.melt <- melt(nb[,c(1, nolines)],
+                  id.vars = "threshold",
+                  value.name = "Netbenefit", variable.name = "Models"
+                  )
+  print(ggplot(nb.melt) +
+          theme(legend.position.inside = legpos) +
+          geom_line(aes(x=threshold, y = Netbenefit,
+                        colour = Models,
+                        linetype = Models)) +
+          geom_ribbon(data=nb, aes(x=threshold,
+                                   ymin = ylow,
+                                   ymax = yup),
+                      linetype = 2, alpha = 0.2) +
+          scale_y_continuous(limits=c(ymin,ymax)) +
+          xlab("Threshold probability") +
+          ylab("Net benefit")
+          
+          )
+}
+
+library(ggplot2)
+library(reshape2)
+nb.survivin
+names(nb)
+nb <- cbind(nb.survivin, pred.new = nb.new$pred)
+names(nb)[names(nb)=="pred"] <- "pred.survivin"
+
+summary(nb)
+head(nb)
+
+plot.ntbft(nb)
+
+```
+
+
