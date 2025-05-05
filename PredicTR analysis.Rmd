@@ -156,6 +156,16 @@ val_data <-data_scaled[data_scaled$set == "Validation", ]
 val_data_dx_date <- data_scaled_dx_date[data_scaled_dx_date$set == "Validation",]
 #n=305
 
+
+# Create the datasets at specific timepoints: 3y
+temp <- survSplit(Surv(t.os, Outcome) ~ ., data = val_data_dx_date, cut = 3, episode = "epoch")
+test_val_3 <- subset(temp, epoch == 1)  # Censored at 3 years
+
+# Create the datasets at specific timepoints: 5y
+temp <- survSplit(Surv(t.os, Outcome) ~ ., data = val_data_dx_date, cut = 5, episode = "epoch")
+test_val_5 <- subset(temp, epoch == 1)  # Censored at 3 years
+
+
 str(training_data)
 str(training_data_dx_date)
 
@@ -334,6 +344,19 @@ test_val_data <- val_data_dx_date[complete.cases(val_data_dx_date[, c("t.os", "D
 test_val_data <- test_val_data %>%
   filter(!is.na(Outcome))
 nrow(test_val_data)
+
+# Creating 5-year-censored dataset, val_5, from test_val_data
+temp <- survSplit(Surv(t.os, Outcome) ~ ., data = test_val_data, cut = 5, episode = "epoch")
+val_5 <- subset(temp, epoch == 1)
+
+
+# Creating 3-year-censored dataset, val_3, from test_val_data
+temp <- survSplit(Surv(t.os, Outcome) ~ ., data = test_val_data, cut = 3, episode = "epoch")
+val_3 <- subset(temp, epoch == 1)
+
+# Creating 10-year-censored dataset, val_10, from test_val_data
+temp <- survSplit(Surv(t.os, Outcome) ~ ., data = test_val_data, cut = 10, episode = "epoch")
+val_10 <- subset(temp, epoch == 1)
 
 # complete_val_data_dx_date: ensures all obs have t.os only
 complete_val_data_dx_date <- val_data_dx_date[complete.cases(val_data_dx_date[, "t.os"]),]
@@ -947,37 +970,35 @@ test_val_data$lp3 <- predict(new_model, test_val_data)
 # FOUR-BIOMARKER (ORIGINAL) CONCORDANCE, VALIDATION DATA
 # 3-year C-index:
 ## Harrell's C
-cindex_3yr <- test_val_data %>%
-  filter(t.os <= 3) %>%  # keep events or censored before 3 years
+cindex_3yr <- val_3 %>%
   { concordance(Surv(t.os, Outcome) ~ lp4, data = ., reverse = TRUE) }
 
 ## Uno's C
-uno_cindex_3yr <- test_val_data %>%
-  filter(t.os <= 3) %>%  # keep events or censored before 3 years
+uno_cindex_3yr <- val_3 %>%  # keep events or censored before 3 years
   { concordance(Surv(t.os, Outcome) ~ lp4, data = ., reverse = TRUE,
                            timewt = "n/G2") }
 
 # 5-year C-index:
 ## Harrell's C
-cindex_5yr <- test_val_data %>%
-  filter(t.os <= 5) %>%  # keep events or censored before 3 years
+cindex_5yr <- val_5 %>%
   { concordance(Surv(t.os, Outcome) ~ lp4, data = ., reverse = TRUE) }
 
 ## Uno's C
-uno_cindex_5yr <- test_val_data %>%
-  filter(t.os <= 5) %>%  # keep events or censored before 3 years
+uno_cindex_5yr <- val_5 %>%
+  { concordance(Surv(t.os, Outcome) ~ lp4, data = ., reverse = TRUE,
+                           timewt = "n/G2") }
+
+uno_cindex_5yr <- val_5 %>%
   { concordance(Surv(t.os, Outcome) ~ lp4, data = ., reverse = TRUE,
                            timewt = "n/G2") }
 
 # 10-year C-index:
 ## Harrell's C
-cindex_10yr <- test_val_data %>%
-  filter(t.os <= 10) %>%  # keep events or censored before 3 years
+cindex_10yr <- val_10 %>%
   { concordance(Surv(t.os, Outcome) ~ lp4, data = ., reverse = TRUE) }
 
 ## Uno's C
-uno_cindex_10yr <- test_val_data %>%
-  filter(t.os <= 10) %>%  # keep events or censored before 3 years
+uno_cindex_10yr <- val_10 %>%
   { concordance(Surv(t.os, Outcome) ~ lp4, data = ., reverse = TRUE,
                            timewt = "n/G2") }
 
@@ -987,37 +1008,33 @@ uno_cindex_10yr <- test_val_data %>%
 # THREE-BIOMARKER (NEW) CONCORDANCE, VALIDATION DATA
 # 3-year C-index:
 ## Harrell's C
-cindex_3yr_new <- test_val_data %>%
-  filter(t.os <= 3) %>%  # keep events or censored before 3 years
+cindex_3yr_new <- val_3 %>%
   { concordance(Surv(t.os, Outcome) ~ lp3, data = ., reverse = TRUE) }
 
 ## Uno's C
-uno_cindex_3yr_new <- test_val_data %>%
-  filter(t.os <= 3) %>%  # keep events or censored before 3 years
+uno_cindex_3yr_new <- val_3 %>%
   { concordance(Surv(t.os, Outcome) ~ lp3, data = ., reverse = TRUE,
                            timewt = "n/G2") }
 
 # 5-year C-index:
 ## Harrell's C
-cindex_5yr_new <- test_val_data %>%
-  filter(t.os <= 5) %>%  # keep events or censored before 3 years
+
+cindex_5yr_new <- val_5 %>%  
   { concordance(Surv(t.os, Outcome) ~ lp3, data = ., reverse = TRUE) }
 
+
 ## Uno's C
-uno_cindex_5yr_new <- test_val_data %>%
-  filter(t.os <= 5) %>%  # keep events or censored before 3 years
+uno_cindex_5yr_new <- val_5 %>%
   { concordance(Surv(t.os, Outcome) ~ lp3, data = ., reverse = TRUE,
                            timewt = "n/G2") }
 
 # 10-year C-index:
 ## Harrell's C
-cindex_10yr_new <- test_val_data %>%
-  filter(t.os <= 10) %>%  # keep events or censored before 3 years
+cindex_10yr_new <- val_10 %>%
   { concordance(Surv(t.os, Outcome) ~ lp3, data = ., reverse = TRUE) }
 
 ## Uno's C
-uno_cindex_10yr_new <- test_val_data %>%
-  filter(t.os <= 10) %>%  # keep events or censored before 3 years
+uno_cindex_10yr_new <- val_10 %>%
   { concordance(Surv(t.os, Outcome) ~ lp3, data = ., reverse = TRUE,
                            timewt = "n/G2") }
 ```
@@ -1176,6 +1193,50 @@ get_uno_auc(test_val_data, timepoint = 4.99, marker_var = "lp3")
 
 
 ```
+
+# Time-dependent discrimination (AUROC at 3 and 5 years), 4-biomarker model
+```{r AUROC 4-biomarker}
+library(timeROC)
+
+# This function returns the Uno AUC with 95% CI at *timepoint* years, rounded to k decimal places, taking either lp4 or lp3 for old and new models respectively.
+
+get_uno_auc <- function(data, timepoint, alpha = 0.05, k = 3, marker_var = "lp4") {
+  roc_result <- timeROC::timeROC(
+    T = data$t.os,
+    delta = data$Outcome,
+    marker = data[[marker_var]],
+    cause = 1,
+    weighting = "marginal",
+    times = timepoint,
+    iid = TRUE
+  )
+  
+  auc <- unname(roc_result$AUC[paste0("t=", timepoint)])
+  sd <- roc_result$inference$vect_sd_1[paste0("t=", timepoint)]
+  
+  res <- c(setNames(auc, paste0("Uno ", timepoint, "-year AUC")),
+    "Lower .95" = auc - qnorm(1 - alpha / 2) * sd,
+    "Upper .95" = auc + qnorm(1 - alpha / 2) * sd
+  )
+  
+  round(res, k)
+}
+# 4-biomarker +survivin model
+# 3 years
+get_uno_auc(test_val_data, timepoint = 2.99)
+# 5 years
+get_uno_auc(test_val_data, timepoint = 4.99)
+
+# 3-biomarker -survivin model
+
+# 3 years
+get_uno_auc(test_val_data, timepoint = 2.99, marker_var = "lp3")
+# 5 years
+get_uno_auc(test_val_data, timepoint = 4.99, marker_var = "lp3")
+
+
+
+```
 # Mean calibration
 observed/expected ratio for fixed time point of 5 years, estimated with Observed:Expected ratio.
 Observed -> the complement of the Kaplan-Meier curve at t=5y. 
@@ -1247,12 +1308,6 @@ Calibration slope for a fixed time point (5y)
 
 ```{r Weak calibration}
 
-# Creating 5-year-censored dataset, val_5yr, from test_val_data
-temp <- survSplit(Surv(t.os, Outcome) ~ ., data = test_val_data, cut = 5, episode = "epoch")
-val_5yr <- subset(temp, epoch == 1)
-
-#Try val_5yr instead of test_val_data for weak calibration:
-
 # Fit the 4-biomarker +survivin model (training data):
 survivin_cal_fit <- coxph(Surv(t.os, Outcome) ~ p16_binary + Survivin + HPVISHHR + TILS,
   data = complete_training_data, 
@@ -1264,9 +1319,9 @@ new_cal_fit  <- update(survivin_cal_fit, . ~ . -Survivin)
 
 # 4-biomarker model:
 # Add linear predictor in the validation set
-val_5yr$lp_survivin_calibration <- predict(survivin_cal_fit, newdata = val_5yr)
+val_5$lp_survivin_calibration <- predict(survivin_cal_fit, newdata = val_5)
 
-gval_survivin <- coxph(Surv(t.os, Outcome) ~ lp_survivin_calibration, data = val_5yr)
+gval_survivin <- coxph(Surv(t.os, Outcome) ~ lp_survivin_calibration, data = val_5)
 
 survivin_calslope_summary <- c(
   "calibration slope" = gval_survivin$coef,
@@ -1278,9 +1333,9 @@ survivin_calslope_summary
 
 # 3-biomarker model:
 # Add linear predictor in the validation set
-val_5yr$lp_new_calibration <- predict(new_cal_fit, newdata = val_5yr)
+val_5$lp_new_calibration <- predict(new_cal_fit, newdata = val_5)
 
-gval_new <- coxph(Surv(t.os, Outcome) ~ lp_new_calibration, data = val_5yr)
+gval_new <- coxph(Surv(t.os, Outcome) ~ lp_new_calibration, data = val_5)
 
 new_calslope_summary <- c(
   "calibration slope" = gval_new$coef,
@@ -1295,7 +1350,7 @@ survivin_calslope_summary
 ```
 
 
-# Moderate Calibration - assess whether observed event rate matches the predicted risk within subgroups of patients wiht similar predicted risk levels
+# Moderate Calibration - assess whether observed event rate matches the predicted risk within subgroups of patients with similar predicted risk levels
 Moderate calibration at fixed time point can be assessed using flexible calibration curve, complemented with ICI, E50, E90 as suggested by Austin et al.
 
 + Calibration curve is a graphical representation of moderate calibration. It shows:  
@@ -1331,11 +1386,11 @@ sfit <- coxph(Surv(t.os, Outcome) ~ p16_binary + Survivin + HPVISHHR + TILS,
   y = T)
 
 # curve:
-val_5yr$pred_survivin <- riskRegression::predictRisk(sfit, 
-                         newdata = val_5yr, 
+val_5$pred_survivin <- riskRegression::predictRisk(sfit, 
+                         newdata = val_5, 
                          times = 5)
 
-val_5yr$pred_survivin.cll <- log(-log(1 - val_5yr$pred_survivin))
+val_5$pred_survivin.cll <- log(-log(1 - val_5$pred_survivin))
 
 
 # Estimate actual risk
@@ -1343,22 +1398,22 @@ vcal_s <- rms::cph(Surv(t.os, Outcome) ~ rcs(pred_survivin.cll, 3),
                  x = T,
                  y = T,
                  surv = T,
-                 data = val_5yr
+                 data = val_5
 ) 
 
 dat_cal_s <- cbind.data.frame(
   "obs" = 1 - rms::survest(vcal_s,
                            times = 5,
-                           newdata = val_5yr)$surv,
+                           newdata = val_5)$surv,
   
   "lower" = 1 - rms::survest(vcal_s,
                              times = 5,
-                             newdata = val_5yr)$upper,
+                             newdata = val_5)$upper,
   
   "upper" = 1 - rms::survest(vcal_s,
                              times = 5,
-                             newdata = val_5yr)$lower,
-  "pred" = val_5yr$pred_survivin
+                             newdata = val_5)$lower,
+  "pred" = val_5$pred_survivin
 )
 
 dat_cal_s <- dat_cal_s[order(dat_cal_s$pred), ]
@@ -1419,11 +1474,11 @@ new_fit <- coxph(Surv(t.os, Outcome) ~ p16_binary + HPVISHHR + TILS,
   y = T)
 
 # curve:
-val_5yr$pred_new <- riskRegression::predictRisk(new_fit, 
-                         newdata = val_5yr, 
+val_5$pred_new <- riskRegression::predictRisk(new_fit, 
+                         newdata = val_5, 
                          times = 5)
 
-val_5yr$pred_new.cll <- log(-log(1 - val_5yr$pred_new))
+val_5$pred_new.cll <- log(-log(1 - val_5$pred_new))
 
 
 # Estimate actual risk
@@ -1431,22 +1486,22 @@ vcal_new <- rms::cph(Surv(t.os, Outcome) ~ rcs(pred_new.cll, 3),
                  x = T,
                  y = T,
                  surv = T,
-                 data = val_5yr
+                 data = val_5
 ) 
 
 dat_cal_new <- cbind.data.frame(
   "obs" = 1 - rms::survest(vcal_new,
                            times = 5,
-                           newdata = val_5yr)$surv,
+                           newdata = val_5)$surv,
   
   "lower" = 1 - rms::survest(vcal_new,
                              times = 5,
-                             newdata = val_5yr)$upper,
+                             newdata = val_5)$upper,
   
   "upper" = 1 - rms::survest(vcal_new,
                              times = 5,
-                             newdata = val_5yr)$lower,
-  "pred" = val_5yr$pred_new
+                             newdata = val_5)$lower,
+  "pred" = val_5$pred_new
 )
 
 dat_cal_new <- dat_cal_new[order(dat_cal_new$pred), ]
@@ -1496,7 +1551,7 @@ ggplot(dat_cal_new, aes(x = pred, y = obs)) +
 #  Agreement between +survivin and -survivin models
 ```{r}
 
-plot_data <- val_5yr %>%
+plot_data <- val_5 %>%
   select(pred_new, pred_survivin)
 
 n <- nrow(plot_data)
@@ -1524,8 +1579,8 @@ cat("Pearson correlation (95% CI):", round(r,3), ", (", round(r_lower, 3), "-", 
 
 # Four-biomarker model
 
-eval_data <- val_5yr %>%
-  mutate(true_label = ifelse(Outcome == 1 & t.os <=5, 1, 0))
+eval_data <- val_5 %>%
+  mutate(true_label = ifelse(Outcome == 1 & t.os <5, 1, 0))
 
 table(eval_data$true_label)
 table(eval_data$risk_group)
@@ -1538,7 +1593,6 @@ FN <- sum(eval_data$risk_group == 0 & eval_data$true_label == 1)
 sensitivity <- TP / (TP + FN)
 PPV <- TP / (TP + FP)
 NPV <- TN / (TN + FN)
-cat("Four-biomarker model:", "\n", "Sensitivity: ", sensitivity, "\n", "PPV:", PPV, "\n", "NPV:", NPV)
 
 # 95% CIs
 compute_metrics <- function(data) {
@@ -1565,6 +1619,10 @@ boot_metrics_df <- as.data.frame(t(boot_metrics))
 # 95% CI using percentiles of 4-biomarker model
 ci_results <- apply(boot_metrics_df, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
 ci_results
+cat("Four-biomarker model:", "\n", 
+    "Sensitivity: ", sensitivity,"(",ci_results[1,1], "," ,ci_results[2,1], ")", "\n", 
+    "PPV:", PPV, "(",ci_results[1,2], "," ,ci_results[2,2], ")", "\n", 
+    "NPV:", NPV, "(", ci_results[1,3], "," ,ci_results[2,3], ")" )
 
 
 ```
@@ -1572,7 +1630,7 @@ ci_results
 ```{r}
 # Three-biomarker model
 
-eval_data <- val_5yr %>%
+eval_data <- val_5 %>%
   mutate(true_label = ifelse(Outcome == 1 & t.os <=5, 1, 0))
 
 table(eval_data$true_label)
@@ -1586,7 +1644,6 @@ FN <- sum(eval_data$risk_group_new == 0 & eval_data$true_label == 1)
 sensitivity <- TP / (TP + FN)
 PPV <- TP / (TP + FP)
 NPV <- TN / (TN + FN)
-cat("Three-biomarker model:", "\n", "Sensitivity: ", sensitivity, "\n", "PPV:", PPV, "\n", "NPV:", NPV)
 
 compute_metrics_new <- function(data) {
   TP <- sum(data$risk_group_new == 1 & data$true_label == 1)
@@ -1611,12 +1668,17 @@ boot_metrics_df <- as.data.frame(t(boot_metrics))
 
 # 95% CI using percentiles of 3-biomarker model
 ci_results <- apply(boot_metrics_df, 2, function(x) quantile(x, probs = c(0.025, 0.975), na.rm = TRUE))
-ci_results
+
+cat("Four-biomarker model:", "\n", 
+    "Sensitivity: ", sensitivity,"(",ci_results[1,1], "," ,ci_results[2,1], ")", "\n", 
+    "PPV:", PPV, "(",ci_results[1,2], "," ,ci_results[2,2], ")", "\n", 
+    "NPV:", NPV, "(", ci_results[1,3], "," ,ci_results[2,3], ")" )
+
 
 ```
 
 # Brier score - recommended overall performance measure
-Brier score is the mean squared difference between observed event indicators and predicted risks at a fixed time point (5y here), lower is better
+Brier score is the mean squared difference between observed event indicators and predicted risks at a fixed time point (5y here); lower is better
 Scaled Brier score, aka Index of Prediction Accuracy (IPA) scales the Brier score (decrease in Brier vs. null model). Expressed as percentage; higher is better.
 ```{r Brier score and IPA, 5 y}
 library(pacman)
@@ -1635,52 +1697,21 @@ new_fit <- coxph(Surv(t.os, Outcome) ~ p16_binary + HPVISHHR + TILS,
   x = T, 
   y = T)
 
-# Brier Score and IPA in the validation set (+survivin model)
-
-score_s <- brier(s_fit, times = c(3,5), newdata = test_val_data)
-# Original model Brier score = 0.221
-score_n <- brier(new_fit, times = c(3,5), newdata = test_val_data)
-#Brier score = 0.220
-
-score_s
-score_n
-
-#install.packages("SurvMetrics")
-
-library(SurvMetrics)
-#calculate the Brier Score
-med_index = median(1:length(dis_time))
-surv_obj = Surv(test_data$time, test_data$status)
-t_star = median(fitrsf$time.interest)
-
-# Predict survival probabilities at 5 years
-times <- 5 # Or 4.99 to match prior code
-surv_prob_s <- predictSurvProb(s_fit, newdata = val_5yr, times = times)
-surv_prob_new <- predictSurvProb(new_fit, newdata = val_5yr, times = times)
-  
-# Create survival object
-surv_obj <- Surv(val_5yr$t.os, val_5yr$Outcome)
-
-# Calculate Brier score
-brier_s <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_s, t_star = times)
-brier_new <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_new, t_star = times)
-
-# Store results
-data_BS <- data.frame(
-  BS = c(brier_s, brier_new),
-  Model = c("4-Biomarker", "3-Biomarker")
-)
-
-# Print results
-cat("Brier Scores:\n")
-data_BS
-
-
-# IPA:
 # Fit null model (Kaplan-Meier equivalent)
 null_fit <- coxph(Surv(t.os, Outcome) ~ 1, data = complete_training_data, 
                   x = TRUE, y = TRUE)
-surv_prob_null <- predictSurvProb(null_fit, newdata = test_val_5yr, times = times)
+
+# Brier Score and IPA in the validation set (+survivin model)
+
+score_s <- brier(s_fit, times = c(5), newdata = val_5)
+# Original model Brier scores = 0.220 (5y)
+score_n <- brier(new_fit, times = c(10), newdata = val_10)
+#New model Brier scores = 0.221 (5y)
+
+
+# IPA:
+library(SurvMetrics)
+surv_prob_null <- predictSurvProb(null_fit, newdata = val_5, times = times)
 
 # Calculate Brier scores
 brier_s <- SurvMetrics::Brier(surv_obj, pre_sp = surv_prob_s, t_star = times)
@@ -1702,188 +1733,448 @@ data_metrics <- data.frame(
 cat("Brier Scores and IPA:\n")
 data_metrics
 
+# 4-biomarker: Brier = 0.220; IPA = 0.095 = 9.5%
+# 3-biomarker: Brier = 0.221; IPA = 0.094 = 9.4%
+
 ```
 
 
 
 ## Surgery vs no surgery in high-risk and low-risk patient groups, validation cohort
+Also adjusting for age at diagnosis, then the clinical variables
 ```{r}
-# summary(complete_val_data$Surgery) #total: 212. Paper (Fig 3C): 221
-# table_risk_surgery <- table(Risk_group = complete_val_data$risk_group, Surgery = complete_val_data$Surgery); print(table_risk_surgery)
-# ls0 <- table_risk_surgery[1,1]; ls1 <- table_risk_surgery[1,2]; hs0 <- table_risk_surgery[2,1]; hs1 <- table_risk_surgery[2,2]
-# 
-# #Split into the risk+surgery groups:
-# val_data_ls0 <- complete_val_data[(complete_val_data$Surgery == 0 & complete_val_data$risk_group == 0),]
-# val_data_ls1 <- complete_val_data[(complete_val_data$Surgery == 1 & complete_val_data$risk_group == 0),]
-# val_data_hs0 <- complete_val_data[(complete_val_data$Surgery == 0 & complete_val_data$risk_group == 1),]
-# val_data_hs1 <- complete_val_data[(complete_val_data$Surgery == 1 & complete_val_data$risk_group == 1),]
-# 
-# table(complete_val_data$risk_group)
-# #n = 212 (vs. 221)
-# #Low: 95 (vs. 101)
-# #High: 117 (vs. 120)
-# 
-# nrow(val_data_ls0) #39, not 38
-# nrow(val_data_ls1) #67, not 63
-# 
-# nrow(val_data_hs0) # 48, not 55
-# nrow(val_data_hs1) # 58, not 65
-# 
-# table(val_data_ls0$Smoking.status)
-# table(val_data_ls1$Smoking.status)
-# table(val_data_ls0$HPVISHHR)
-# table(val_data_ls1$HPVISHHR)
-# 
-# table(val_data_hs0$Smoking.status)
-# table(val_data_hs1$Smoking.status)
-# table(val_data_hs0$HPVISHHR)
-# table(val_data_hs1$HPVISHHR)
-# 
-# 
-# library(survminer)
-# 
-# #Create combined group factor
-# complete_val_data$risk_surgery <- factor(
-#   paste0(
-#     
-#     ifelse(complete_val_data$risk_group==0, "l", "h"),
-#     ifelse(complete_val_data$Surgery == 0, "s0", "s1")
-#     
-#   ),
-#   levels = c("ls0", "ls1", "hs0", "hs1")
-# )
-# 
-# #Kaplan-Meier
-# surv_obj <- Surv(complete_val_data$t.os, complete_val_data$Outcome)
-# 
-# surv_fit <- survfit(surv_obj ~ risk_surgery, data = complete_val_data)
-# 
-# str(complete_val_data$risk_surgery)
-# print(summary(surv_fit))
-# 
-# ggsurv <- ggsurvplot(
-#   surv_fit,
-#   data = complete_val_data,
-#   palette = c("blue", "green", "red", "purple"),
-#   risk.table = TRUE,
-#   risk.table.height = 0.25,
-#   title = "Survival by Risk Group and Surgery Status",
-#   xlab = "Time (months)",
-#   ylab = "Survival Probability",
-#   legend.title = "Group",
-#   legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
-#   conf.int = FALSE,
-#   pval = FALSE,
-#   xlim = c(0, 60)  # Adjust based on t.os range
-# )
-# print(ggsurv)
-# 
-# 
-# low_data <- complete_val_data[complete_val_data$risk_group == 0, ]
-# low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
-# low_summary <- summary(low_cox)
-# low_summary
-# low_hr <- low_summary$coefficients["Surgery1", "exp(coef)"]
-# low_ci <- exp(low_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * low_summary$coefficients["Surgery1", "se(coef)"])
-# low_p <- low_summary$coefficients["Surgery1", "Pr(>|z|)"]
-# 
-# low_hr
-# low_ci
-# low_p
-# 
-# 
-# high_data <- complete_val_data[complete_val_data$risk_group == 1, ]
-# high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
-# high_summary <- summary(high_cox)
-# high_summary
-# high_hr <- high_summary$coefficients["Surgery1", "exp(coef)"]
-# high_ci <- exp(high_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * high_summary$coefficients["Surgery1", "se(coef)"])
-# high_p <- high_summary$coefficients["Surgery1", "Pr(>|z|)"]
-# 
-# #High-risk group: surgery vs non surgery
-# high_hr
-# high_ci
-# high_p
-# 
-# 
-# ```
-# ## Surgery vs no surgery in low-risk and high-risk pts, training cohort
-# ```{r}
-# summary(complete_training_data$Surgery) #total: 259 Paper (Fig 3A): 266
-# table_risk_surgery0 <- table(Risk_group = complete_training_data$risk_group, Surgery = complete_training_data$Surgery); print(table_risk_surgery0)
-# ls0 <- table_risk_surgery0[1,1]; ls1 <- table_risk_surgery0[1,2]; hs0 <- table_risk_surgery0[2,1]; hs1 <- table_risk_surgery0[2,2]
-# 
-# #Split into the risk+surgery groups:
-# train_data_ls0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 0),]
-# train_data_ls1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 0),]
-# train_data_hs0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 1),]
-# train_data_hs1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 1),]
-# 
-# 
-# library(survminer)
-# 
-# #Create combined group factor
-# complete_training_data$risk_surgery <- factor(
-#   paste0(
-#     
-#     ifelse(complete_training_data$risk_group==0, "l", "h"),
-#     ifelse(complete_training_data$Surgery == 0, "s0", "s1")
-#     
-#   ),
-#   levels = c("ls0", "ls1", "hs0", "hs1")
-# )
-# 
-# #Kaplan-Meier
-# surv_obj0 <- Surv(complete_training_data$t.os, complete_training_data$Outcome)
-# 
-# surv_fit0 <- survfit(surv_obj0 ~ risk_surgery, data = complete_training_data)
-# 
-# str(complete_training_data$risk_surgery)
-# print(summary(surv_fit0))
-# 
-# ggsurv <- ggsurvplot(
-#   surv_fit0,
-#   data = complete_training_data,
-#   palette = c("blue", "green", "red", "purple"),
-#   risk.table = TRUE,
-#   risk.table.height = 0.25,
-#   title = "Survival by Risk Group and Surgery Status",
-#   xlab = "Time (months)",
-#   ylab = "Survival Probability",
-#   legend.title = "Group",
-#   legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
-#   conf.int = FALSE,
-#   pval = FALSE,
-#   xlim = c(0, 60)  # Adjust based on t.os range
-# )
-# print(ggsurv)
-# 
-# 
-# low_data <- complete_training_data[complete_training_data$risk_group == 0, ]
-# low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
-# low_summary <- summary(low_cox)
-# low_summary
-# low_hr <- low_summary$coefficients["Surgery1", "exp(coef)"]
-# low_ci <- exp(low_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * low_summary$coefficients["Surgery1", "se(coef)"])
-# low_p <- low_summary$coefficients["Surgery1", "Pr(>|z|)"]
-# 
-# low_hr
-# low_ci
-# low_p
-# 
-# 
-# high_data <- complete_training_data[complete_training_data$risk_group == 1, ]
-# high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
-# high_summary <- summary(high_cox)
-# high_summary
-# high_hr <- high_summary$coefficients["Surgery1", "exp(coef)"]
-# high_ci <- exp(high_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * high_summary$coefficients["Surgery1", "se(coef)"])
-# high_p <- high_summary$coefficients["Surgery1", "Pr(>|z|)"]
-# 
-# #High-risk group: surgery vs non surgery
-# high_hr
-# high_ci
-# high_p
+summary(test_val_data$Surgery) #total: 212. Paper (Fig 3C): 221
+table_risk_surgery <- table(Risk_group = test_val_data$risk_group_new, Surgery = test_val_data$Surgery); print(table_risk_surgery)
+ls0 <- table_risk_surgery[1,1]; ls1 <- table_risk_surgery[1,2]; hs0 <- table_risk_surgery[2,1]; hs1 <- table_risk_surgery[2,2]
+
+#Split into the risk+surgery groups:
+val_data_ls0 <- test_val_data[(test_val_data$Surgery == 0 & test_val_data$risk_group_new == 0),]
+val_data_ls1 <- test_val_data[(test_val_data$Surgery == 1 & test_val_data$risk_group_new == 0),]
+val_data_hs0 <- test_val_data[(test_val_data$Surgery == 0 & test_val_data$risk_group_new == 1),]
+val_data_hs1 <- test_val_data[(test_val_data$Surgery == 1 & test_val_data$risk_group_new == 1),]
+
+
+table(val_data_ls0$Smoking.status)
+table(val_data_ls1$Smoking.status)
+table(val_data_ls0$HPVISHHR)
+table(val_data_ls1$HPVISHHR)
+
+table(val_data_hs0$Smoking.status)
+table(val_data_hs1$Smoking.status)
+table(val_data_hs0$HPVISHHR)
+table(val_data_hs1$HPVISHHR)
+
+
+library(survminer)
+
+#Create combined group factor
+test_val_data$risk_surgery <- factor(
+  paste0(
+
+    ifelse(test_val_data$risk_group_new==0, "l", "h"),
+    ifelse(test_val_data$Surgery == 0, "s0", "s1")
+
+  ),
+  levels = c("ls0", "ls1", "hs0", "hs1")
+)
+
+#Kaplan-Meier
+surv_obj <- Surv(test_val_data$t.os, test_val_data$Outcome)
+
+surv_fit <- survfit(surv_obj ~ risk_surgery, data = test_val_data)
+
+ggsurv <- ggsurvplot(
+  surv_fit,
+  data = test_val_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = FALSE,
+  title = "Training set - Three-Biomarker Model: Survival by Combined Risk Group and Surgery Status",
+  xlab = "Time (years)",
+  ylab = "Survival Probability",
+  legend.title = "Group",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),  # Up to 5 years
+  break.time.by = 1
+)
+print(ggsurv)
+
+# change this based on dataset and whether 3- or 4-biomarker model
+low_data <- test_val_data[test_val_data$risk_group_new == 0, ]
+high_data <- test_val_data[test_val_data$risk_group_new == 1, ]
+
+
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+# Low-risk group HR: 0.78 (0.35 - 1.72), log-rank P = 0.54
+low_hr <- low_summary$coefficients["Surgery1", "exp(coef)"]
+low_ci <- exp(low_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * low_summary$coefficients["Surgery1", "se(coef)"])
+low_p <- low_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+low_hr
+low_ci
+low_p
+
+
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+high_hr <- high_summary$coefficients["Surgery1", "exp(coef)"]
+high_ci <- exp(high_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * high_summary$coefficients["Surgery1", "se(coef)"])
+high_p <- high_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+#High-risk group: surgery vs non surgery
+# HR = 0.42 (0.25-0.70), log-rank P < 0.001
+high_hr
+high_ci
+high_p
+
+# Adjusting for year of diagnosis:
+# Fit 3-biomarker Cox model + Age.at.Diagnosis
+adj_new_model <- fit_cox_model(complete_training_data, c("p16_binary", "HPVISHHR", "TILS", "Age.at.Diagnosis"))
+# Calculate median with training set:
+complete_training_data$risk_score_new_adj <- predict(adj_new_model, complete_training_data, type = "lp")
+summary(complete_training_data$risk_score_new_adj)
+
+ggplot(complete_training_data, aes(x = risk_score_new_adj)) +
+  geom_histogram(aes(y = after_stat(density), fill = "Original"), alpha = 0.5, bins = 100) +
+  geom_histogram(aes(x = risk_score_new, y = after_stat(density), fill = "New"), alpha = 0.5, bins = 100) +
+  labs(title = "Histogram of Risk Scores",
+       x = "Risk Score",
+       y = "Density",
+       fill = "Score Type") +
+  theme_minimal()
+
+risk_med_cutoff_new_adj <- median(complete_training_data$risk_score_new_adj)
+
+#Validation data: calculate risk scores
+
+test_val_data$risk_score_new_adj <- predict(adj_new_model, test_val_data, type = "lp")
+summary(test_val_data$risk_score_new_adj)
+
+# Classify into risk groups:
+test_val_data$risk_group_new_adj <- ifelse(test_val_data$risk_score_new > risk_med_cutoff_new_adj, 1, 0)
+
+# Split into surgery +/- groups and calculate HR:
+
+table_risk_surgery <- table(Risk_group = test_val_data$risk_group_new_adj, Surgery = test_val_data$Surgery); print(table_risk_surgery)
+ls0 <- table_risk_surgery[1,1]; ls1 <- table_risk_surgery[1,2]; hs0 <- table_risk_surgery[2,1]; hs1 <- table_risk_surgery[2,2]
+
+#Split into the risk+surgery groups:
+val_data_ls0 <- test_val_data[(test_val_data$Surgery == 0 & test_val_data$risk_group_new_adj == 0),]
+val_data_ls1 <- test_val_data[(test_val_data$Surgery == 1 & test_val_data$risk_group_new_adj == 0),]
+val_data_hs0 <- test_val_data[(test_val_data$Surgery == 0 & test_val_data$risk_group_new_adj == 1),]
+val_data_hs1 <- test_val_data[(test_val_data$Surgery == 1 & test_val_data$risk_group_new_adj == 1),]
+
+# change this based on dataset and whether 3- or 4-biomarker model
+low_data <- test_val_data[test_val_data$risk_group_new_adj == 0, ]
+high_data <- test_val_data[test_val_data$risk_group_new_adj == 1, ]
+
+# Calculate HRs
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+# Low-risk group HR: 0.78 (0.35 - 1.72), log-rank P = 0.54
+low_hr <- low_summary$coefficients["Surgery1", "exp(coef)"]
+low_ci <- exp(low_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * low_summary$coefficients["Surgery1", "se(coef)"])
+low_p <- low_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+low_hr
+low_ci
+low_p
+
+
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+high_hr <- high_summary$coefficients["Surgery1", "exp(coef)"]
+high_ci <- exp(high_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * high_summary$coefficients["Surgery1", "se(coef)"])
+high_p <- high_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+#High-risk group: surgery vs non surgery
+# HR = 0.42 (0.25-0.70), log-rank P < 0.001
+high_hr
+high_ci
+high_p
+## Findings: Highly similar when adjusted for Age.at.Diagnosis.
+```
+
+
+```{r Propensity score matching: 3-biomarker model}
+########################
+# Adjusting to address potential treatment selection bias
+library(MatchIt)
+library(survival)
+# High risk:
+# Matching on Age.at.Diagnosis, Smoking.status, T, and N
+high.m.out <- matchit(
+  Surgery ~ Age.at.Diagnosis + Smoking.status + T + N,
+  data = high_data,
+  method = "full",
+  distance = "glm"
+)
+# Extracting matched data with weights
+high_matched_data <- match.data(high.m.out)
+
+# Fit weighted model
+high_psm_model <- coxph(Surv(t.os, Outcome) ~ Surgery,
+                   data = high_matched_data,
+                   weights = weights)
+
+summary(high_psm_model)
+summary(high_psm_model)$sctest["pvalue"]
+# High risk group -surgery vs +surgery: HR = 0.31 (0.18 - 0.55), p < 0.001
+
+# Low risk:
+# Matching on Age.at.Diagnosis, Smoking.status, T, and N
+low.m.out <- matchit(
+  Surgery ~ Age.at.Diagnosis + Smoking.status + T + N,
+  data = low_data,
+  method = "full",
+  distance = "glm"
+)
+# Extracting matched data with weights
+low_matched_data <- match.data(low.m.out)
+
+# Fit weighted model
+low_psm_model <- coxph(Surv(t.os, Outcome) ~ Surgery,
+                   data = low_matched_data,
+                   weights = weights)
+
+summary(low_psm_model)$sctest["pvalue"]
+
+# Low risk group -surgery vs +surgery: HR = 0.66 (0.18 - 2.43), logrank P = 0.322
+
+
+```
+
+## Surgery vs no surgery in low-risk and high-risk pts, training cohort
+Aims:
+- Address the +surgery vs -surgery finding: "In the validation cohort, the model was predictive of improved survival following treatment with surgery and CT over CRT alone for high-risk patients... but was not statistically significant in the low-risk patients."
+- In the high (and maybe low-) risk group, compare the 3-year and 5-year OS for those who receive surgery vs those who did not. Find:
+1. HR (95% CI) of high-risk surgery + adjuvant treatment vs. high-risk CRT
+2. HR (95% CI) of low-risk surgery + adjuvant treatment vs. low-risk CRT
+ -> Repeat, adjusting for year of diagnosis
+ -> Repeat, adjusting for propensity score based on T, N, smoking status, and age at diagnosis.
+3. Generate a survival plot of all 4 groups (surgery status x risk group) for old and new models
+
+```{r Surgery, 3-biomarker, training set}
+library(survminer)
+
+# Table of Surgery status by Risk group assignment from the 3-biomarker model:
+table_risk_surgery0 <- table(Risk_group = complete_training_data$risk_group_new, Surgery = complete_training_data$Surgery); print(table_risk_surgery0)
+
+#l = low-risk, h = high-risk
+#s0 = no surgery, s1 = surgery
+
+ls0 <- table_risk_surgery0[1,1]; ls1 <- table_risk_surgery0[1,2]; hs0 <- table_risk_surgery0[2,1]; hs1 <- table_risk_surgery0[2,2]
+
+#Split training data into their risk/surgery groups:
+train_data_ls0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 0),]
+train_data_ls1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 0),]
+train_data_hs0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 1),]
+train_data_hs1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 1),]
+
+
+#Create combined group factor
+complete_training_data$risk_surgery_new <- factor(
+  paste0(
+
+    ifelse(complete_training_data$risk_group_new==0, "l", "h"),
+    ifelse(complete_training_data$Surgery == 0, "s0", "s1")
+
+  ),
+  levels = c("ls0", "ls1", "hs0", "hs1")
+)
+
+#Kaplan-Meier
+surv_obj0 <- Surv(complete_training_data$t.os, complete_training_data$Outcome)
+
+surv_fit0 <- survfit(surv_obj0 ~ risk_surgery_new, data = complete_training_data)
+
+str(complete_training_data$risk_surgery_new)
+
+table(complete_training_data$risk_surgery_new)
+#K-M plot
+ggsurv <- ggsurvplot(
+  surv_fit0,
+  data = complete_training_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = FALSE,
+  title = "Training set - Three-Biomarker Model: Survival by Combined Risk Group and Surgery Status",
+  xlab = "Time (years)",
+  ylab = "Survival Probability",
+  legend.title = "Group",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),  # Up to 5 years
+  break.time.by = 1
+)
+print(ggsurv)
+
+
+low_data <- complete_training_data[complete_training_data$risk_group_new == 0, ]
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+# Overall Cox PH model HR (for surgery+ vs surgery- in low risk group): 0.17 (0.05 - 0.59), log-rank P = 0.002
+
+high_data <- complete_training_data[complete_training_data$risk_group_new == 1, ]
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+# Overall Cox PH model HR (for surgery+ vs surgery- in high risk group): 0.55 (0.30 - 1.00), log-rank P = 0.05
+
+#K-M 3-year OS
+
+```
+# surgery+/- in new model, validation set
+```{r Surgery, 3-biomarker, validation set}
+library(survminer)
+
+# Table of Surgery status by Risk group assignment from the 3-biomarker model:
+
+table_risk_surgery0 <- table(Risk_group = complete_training_data$risk_group_new, Surgery = complete_training_data$Surgery); print(table_risk_surgery0)
+
+#l = low-risk, h = high-risk
+#s0 = no surgery, s1 = surgery
+
+ls0 <- table_risk_surgery0[1,1]; ls1 <- table_risk_surgery0[1,2]; hs0 <- table_risk_surgery0[2,1]; hs1 <- table_risk_surgery0[2,2]
+
+#Split training data into their risk/surgery groups:
+train_data_ls0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 0),]
+train_data_ls1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 0),]
+train_data_hs0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 1),]
+train_data_hs1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 1),]
+
+
+#Create combined group factor
+complete_training_data$risk_surgery_new <- factor(
+  paste0(
+
+    ifelse(complete_training_data$risk_group_new==0, "l", "h"),
+    ifelse(complete_training_data$Surgery == 0, "s0", "s1")
+
+  ),
+  levels = c("ls0", "ls1", "hs0", "hs1")
+)
+
+#Kaplan-Meier
+surv_obj0 <- Surv(complete_training_data$t.os, complete_training_data$Outcome)
+
+surv_fit0 <- survfit(surv_obj0 ~ risk_surgery_new, data = complete_training_data)
+
+str(complete_training_data$risk_surgery_new)
+
+table(complete_training_data$risk_surgery_new)
+
+ggsurv <- ggsurvplot(
+  surv_fit0,
+  data = complete_training_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = FALSE,
+  title = "Training set - Three-Biomarker Model: Survival by Combined Risk Group and Surgery Status",
+  xlab = "Time (years)",
+  ylab = "Survival Probability",
+  legend.title = "Group",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),  # Up to 5 years
+  break.time.by = 1
+)
+print(ggsurv)
+
+
+low_data <- complete_training_data[complete_training_data$risk_group_new == 0, ]
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+# HR (for surgery+ vs surgery- in low risk group): 0.17 (0.05 - 0.59), log-rank P = 0.002
+
+high_data <- complete_training_data[complete_training_data$risk_group_new == 1, ]
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+# HR (for surgery+ vs surgery- in high risk group): 0.55 (0.30 - 1.00), log-rank P = 0.05
+
+```
+
+
+# Attempted replication of 4-biomarker model 4-group plots
+```{r Surgery, 4-biomarker}
+
+# Table of Surgery status by Risk group assignment from the 4-biomarker model:
+table_risk_surgery0 <- table(Risk_group = complete_training_data$risk_group, Surgery = complete_training_data$Surgery); print(table_risk_surgery0)
+
+#l = low-risk, h = high-risk
+#s0 = no surgery, s1 = surgery
+
+ls0 <- table_risk_surgery0[1,1]; ls1 <- table_risk_surgery0[1,2]; hs0 <- table_risk_surgery0[2,1]; hs1 <- table_risk_surgery0[2,2]
+
+#Split training data into their risk/surgery groups:
+train_data_ls0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 0),]
+train_data_ls1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 0),]
+train_data_hs0 <- complete_training_data[(complete_training_data$Surgery == 0 & complete_training_data$risk_group == 1),]
+train_data_hs1 <- complete_training_data[(complete_training_data$Surgery == 1 & complete_training_data$risk_group == 1),]
+
+
+library(survminer)
+
+#Create combined group factor
+complete_training_data$risk_surgery <- factor(
+  paste0(
+
+    ifelse(complete_training_data$risk_group==0, "l", "h"),
+    ifelse(complete_training_data$Surgery == 0, "s0", "s1")
+
+  ),
+  levels = c("ls0", "ls1", "hs0", "hs1")
+)
+
+#Kaplan-Meier
+surv_obj0 <- Surv(complete_training_data$t.os, complete_training_data$Outcome)
+
+surv_fit0 <- survfit(surv_obj0 ~ risk_surgery, data = complete_training_data)
+
+str(complete_training_data$risk_surgery)
+print(summary(surv_fit0))
+
+table(complete_training_data$risk_surgery)
+
+ggsurv <- ggsurvplot(
+  surv_fit0,
+  data = complete_training_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = FALSE,
+  title = "Training set - Four-Biomarker Model: Survival by Combined Risk Group and Surgery Status",
+  xlab = "Time (years)",
+  ylab = "Survival Probability",
+  legend.title = "Group",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),  # Up to 5 years
+  break.time.by = 1
+)
+print(ggsurv)
+
+
+low_data <- complete_training_data[complete_training_data$risk_group == 0, ]
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+# HR (for surgery+ vs surgery- in low risk group): 0.23 (0.05 - 1.1), log-rank P = 0.04
+
+high_data <- complete_training_data[complete_training_data$risk_group == 1, ]
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+# HR (for surgery+ vs surgery- in high risk group): 0.52 (0.30 - 0.92), log-rank P = 0.02
+
 
 ```
 
