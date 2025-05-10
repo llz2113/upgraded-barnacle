@@ -1956,20 +1956,20 @@ lrtest(s_fit, new_fit)
 
 # Val data (for generalizability):
 s_fit_val <- coxph(Surv(t.os, Outcome) ~ p16_binary + Survivin + HPVISHHR + TILS,
-  data = test_val_data, 
+  data = test_val_5yr, 
   x = T, 
   y = T)
 
 new_fit_val <- coxph(Surv(t.os, Outcome) ~ p16_binary + HPVISHHR + TILS,
-  data = test_val_data, 
+  data = test_val_5yr, 
   x = T, 
   y = T)
 
 lrtest(s_fit_val, new_fit_val)
 
 # Extract log-likelihoods
-loglik_reduced <- logLik(new_fit)
-loglik_full <- logLik(s_fit)
+loglik_reduced <- logLik(new_fit_val)
+loglik_full <- logLik(s_fit_val)
 
 test_statistic <- -2 * (loglik_reduced[1] - loglik_full[1])
 df <-  (length(s_fit$coefficients) - length(new_fit$coefficients))
@@ -1980,6 +1980,9 @@ p_value <- 1 - pchisq(test_statistic, df)
 print(paste("Test statistic:", test_statistic))
 print(paste("Degrees of freedom:", df))
 print(paste("P-value:", p_value))
+
+
+
 ```
 
 
@@ -2013,7 +2016,7 @@ table(val_data_hs1$HPVISHHR)
 library(survminer)
 
 #Create combined group factor
-test_val_data$risk_surgery <- factor(
+test_val_data$risk_surgery_new <- factor(
   paste0(
 
     ifelse(test_val_data$risk_group_new==0, "l", "h"),
@@ -2026,7 +2029,7 @@ test_val_data$risk_surgery <- factor(
 #Kaplan-Meier
 surv_obj <- Surv(test_val_data$t.os, test_val_data$Outcome)
 
-surv_fit <- survfit(surv_obj ~ risk_surgery, data = test_val_data)
+surv_fit <- survfit(surv_obj ~ risk_surgery_new, data = test_val_data)
 
 ggsurv <- ggsurvplot(
   surv_fit,
@@ -2194,6 +2197,133 @@ summary(low_psm_model)$sctest["pvalue"]
 
 
 ```
+```{r Surgery Plot: Validation set - Three-Biomarker Model (not adjusted)}
+# Main plot with no risk table
+#Kaplan-Meier
+surv_obj2 <- Surv(test_val_data$t.os, test_val_data$Outcome)
+
+surv_fit2 <- survfit(surv_obj2 ~ risk_surgery_new, data = test_val_data)
+
+summary(surv_fit2, times = seq(0, 5) * 1)
+
+ggsurv <- ggsurvplot(
+  surv_fit2,
+  data = test_val_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = FALSE,
+  title = "Validation set (Surgery) - Three-Biomarker Model",
+  xlab = "Time (years)",
+  ylab = "Probability (overall survival)",
+  legend.title = " ",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),  # Up to 5 years
+  break.time.by = 1
+)
+print(ggsurv)
+
+# change this based on dataset and whether 3- or 4-biomarker model
+low_data <- test_val_data[test_val_data$risk_group_new == 0, ]
+high_data <- test_val_data[test_val_data$risk_group_new == 1, ]
+
+
+low_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = low_data)
+low_summary <- summary(low_cox)
+low_summary
+# Low-risk group HR: 0.78 (0.35 - 1.72), log-rank P = 0.54
+low_hr <- low_summary$coefficients["Surgery1", "exp(coef)"]
+low_ci <- exp(low_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * low_summary$coefficients["Surgery1", "se(coef)"])
+low_p <- low_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+low_hr
+low_ci
+low_p
+
+
+high_cox <- coxph(Surv(t.os, Outcome) ~ Surgery, data = high_data)
+high_summary <- summary(high_cox)
+high_summary
+high_hr <- high_summary$coefficients["Surgery1", "exp(coef)"]
+high_ci <- exp(high_summary$coefficients["Surgery1", "coef"] + c(-1.96, 1.96) * high_summary$coefficients["Surgery1", "se(coef)"])
+high_p <- high_summary$coefficients["Surgery1", "Pr(>|z|)"]
+
+#High-risk group: surgery vs non surgery
+# HR = 0.42 (0.25-0.70), log-rank P < 0.001
+high_hr
+high_ci
+high_p
+####################################
+#PLOT
+test_val_data$risk_surgery_new <- factor(test_val_data$risk_surgery_new,
+  levels = c("ls0", "ls1", "hs0", "hs1"),
+  labels = c("L-S0", "L-S1", "H-S0", "H-S1")
+)
+
+surv_fit2 <- survfit(surv_obj ~ risk_surgery_new, data = test_val_data)
+names(surv_fit2$strata) <- c("L-S0", "L-S1", "H-S0", "H-S1")
+
+plot_main <- ggsurvplot(
+  surv_fit2,
+  data = test_val_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = FALSE,
+  title = "Validation set (Surgery) - Three-Biomarker Model",
+  xlab = "Time (years)",
+  ylab = "Probability (Overall Survival)",
+  legend.title = " ",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),
+  break.time.by = 1,
+  font.tickslab = 10
+)
+plot_main$plot <- plot_main$plot +
+  theme_classic() +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(size = 10),
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 10, face = "bold")
+  )
+# Risk table only
+plot_table <- ggsurvplot(
+  surv_fit2,
+  data = test_val_data,
+  risk.table = TRUE,
+  risk.table.height = 0.25,
+  risk.table.y.text = TRUE,
+  risk.table.fontsize = 5,  #
+  tables.theme = theme_cleantable(),
+  palette = c("blue", "green", "red", "purple"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),
+  break.time.by = 1
+)
+
+# Extract the plots
+p1 <- plot_main$plot
+p1 <- p1 +
+  annotate("text", x = 0.1, y = 0.2, hjust = 0, size = 5,
+           label = "Low, Surgery+ vs Low, Surgery-:") +
+  annotate("text", x = 0.1, y = 0.15, hjust = 0, size = 5,
+           label = "HR = 0.78 (0.35 - 1.72), P = 0.54") +
+  annotate("text", x = 0.1, y = 0.1, hjust = 0, size = 5,
+           label = "High, Surgery+ vs High, Surgery-:") +
+  annotate("text", x = 0.1, y = 0.05, hjust = 0, size = 5,
+           label = "HR = 0.42 (0.25-0.70), P < 0.001")
+p2 <- plot_table$table
+plot_new_val_surg <- p1 / p2 + plot_layout(heights = c(5, 1))
+plot_new_val_surg
+
+ggsave("survival_plot_val.png", plot = plot_new_val_surg, height = 8, width = 10, dpi = 300)
+
+```
+
 
 ## Surgery vs no surgery in low-risk and high-risk pts, training cohort
 Aims:
@@ -2233,7 +2363,7 @@ complete_training_data$risk_surgery_new <- factor(
   ),
   levels = c("ls0", "ls1", "hs0", "hs1")
 )
-
+complete_training_data$risk_surgery_new
 #Kaplan-Meier
 surv_obj0 <- Surv(complete_training_data$t.os, complete_training_data$Outcome)
 
@@ -2279,6 +2409,7 @@ high_summary
 # surgery+/- in new model, validation set
 ```{r Surgery, 3-biomarker, validation set}
 library(survminer)
+library(patchwork)
 
 # Table of Surgery status by Risk group assignment from the 3-biomarker model:
 
@@ -2320,8 +2451,8 @@ ggsurv <- ggsurvplot(
   surv_fit0,
   data = complete_training_data,
   palette = c("blue", "green", "red", "purple"),
-  risk.table = FALSE,
-  title = "Training set - Three-Biomarker Model: Survival by Combined Risk Group and Surgery Status",
+  risk.table = TRUE,
+  title = "Training set (Surgery) - Three-Biomarker Model",
   xlab = "Time (years)",
   ylab = "Survival Probability",
   legend.title = "Group",
@@ -2329,8 +2460,12 @@ ggsurv <- ggsurvplot(
   conf.int = FALSE,
   pval = FALSE,
   xlim = c(0, 4.99),  # Up to 5 years
-  break.time.by = 1
+  break.time.by = 1,
+  
+  risk.table.height = 0.5,  # Try increasing this if space is tight
+  font.tickslab = 10  
 )
+
 print(ggsurv)
 
 
@@ -2346,6 +2481,96 @@ high_summary <- summary(high_cox)
 high_summary
 # HR (for surgery+ vs surgery- in high risk group): 0.55 (0.30 - 1.00), log-rank P = 0.05
 
+
+
+```
+
+```{r Surgery Plot: Training set - Three-Biomarker Model (not adjusted)}
+
+complete_training_data$risk_surgery_new <- factor(
+  paste0(
+
+    ifelse(complete_training_data$risk_group_new==0, "l", "h"),
+    ifelse(complete_training_data$Surgery == 0, "s0", "s1")
+
+  ),
+  levels = c("ls0", "ls1", "hs0", "hs1")
+)
+table(complete_training_data$risk_surgery_new)
+#Kaplan-Meier
+surv_obj0 <- Surv(complete_training_data$t.os, complete_training_data$Outcome)
+
+surv_fit1 <- survfit(surv_obj0 ~ risk_surgery_new, data = complete_training_data)
+# Main plot with no risk table
+
+complete_training_data$risk_surgery_new <- factor(complete_training_data$risk_surgery_new,
+  levels = c("ls0", "ls1", "hs0", "hs1"),
+  labels = c("L-S0", "L-S1", "H-S0", "H-S1")
+)
+
+summary(complete_training_data$risk_surgery_new)
+
+names(surv_fit1$strata) <- c("L-S0", "L-S1", "H-S0", "H-S1")
+
+plot_main <- ggsurvplot(
+  surv_fit1,
+  data = complete_training_data,
+  palette = c("blue", "green", "red", "purple"),
+  risk.table = FALSE,
+  title = "Training set (Surgery) - Three-Biomarker Model",
+  xlab = "Time (years)",
+  ylab = "Probability (Overall Survival)",
+  legend.title = " ",
+  legend.labs = c("Low, Surgery-", "Low, Surgery+", "High, Surgery-", "High, Surgery+"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),
+  break.time.by = 1,
+  font.tickslab = 10,
+
+)
+plot_main$plot <- plot_main$plot +
+  theme_classic() +
+  theme(
+    panel.border = element_rect(colour = "black", fill = NA, size = 1),
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(size = 10),
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 10, face = "bold")
+  )
+
+# Risk table only
+plot_table <- ggsurvplot(
+  surv_fit1,
+  data = complete_training_data,
+  risk.table = TRUE,
+  risk.table.height = 0.25,
+  risk.table.y.text = TRUE,
+  risk.table.fontsize = 5,  #
+  tables.theme = theme_cleantable(),
+  palette = c("blue", "green", "red", "purple"),
+  conf.int = FALSE,
+  pval = FALSE,
+  xlim = c(0, 4.99),
+  break.time.by = 1
+)
+
+# Extract the plots
+p1 <- plot_main$plot
+p1 <- p1 +
+  annotate("text", x = 0.1, y = 0.2, hjust = 0, size = 5,
+           label = "Low, Surgery+ vs Low, Surgery-:") +
+  annotate("text", x = 0.1, y = 0.15, hjust = 0, size = 5,
+           label = "HR = 0.17 (0.05 - 0.59), P = 0.002") +
+  annotate("text", x = 0.1, y = 0.1, hjust = 0, size = 5,
+           label = "High, Surgery+ vs High, Surgery-:") +
+  annotate("text", x = 0.1, y = 0.05, hjust = 0, size = 5,
+           label = "HR = 0.55 (0.30 - 1.00), P = 0.05")
+p2 <- plot_table$table
+plot_new_train_surg <- p1 / p2 + plot_layout(heights = c(5, 1))
+plot_new_train_surg
+ggsave("survival_plot.png", plot = plot_new_train_surg, height = 8, width = 10, dpi = 300)
 ```
 
 
